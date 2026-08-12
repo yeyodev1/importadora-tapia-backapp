@@ -18,7 +18,8 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
-    "mysql2": "^3.22.1"
+    "mysql2": "^3.22.1",
+    "socks": "^2.8.9"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
