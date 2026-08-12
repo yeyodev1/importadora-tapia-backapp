@@ -47,8 +47,12 @@ function resolveProxy(): ProxyConfig | null {
     host = envUrl;
   }
 
-  if (process.env.FIXIE_SOCKS_USER) userId = process.env.FIXIE_SOCKS_USER;
-  if (process.env.FIXIE_SOCKS_PASS) password = process.env.FIXIE_SOCKS_PASS;
+  // FIXIE_URL manda: es lo que inyecta la integración de Fixie en Vercel.
+  // FIXIE_SOCKS_* sólo se usa si la URL no traía credenciales.
+  if (!password && process.env.FIXIE_SOCKS_PASS) {
+    password = process.env.FIXIE_SOCKS_PASS;
+    if (process.env.FIXIE_SOCKS_USER) userId = process.env.FIXIE_SOCKS_USER;
+  }
 
   return { host, port, userId, password };
 }
