@@ -1,30 +1,58 @@
-**Asunto:** Re: Integración CRM — Cloudflare Tunnel como alternativa a whitelist IP
+# Respuesta a Andrés Macio — falta el host público
 
-Estimada María José, estimado Andrés,
+**Asunto:** Re: Coordinación acceso restringido por IP — pruebas de conexión SSL/TLS
 
-Sobre la whitelist de IP fija: lamentablemente no es viable. Nuestro backend corre en **Vercel (serverless)**, lo que significa que las funciones no tienen una IP de salida fija. No podemos garantizar una sola IP, ni siquiera un rango predecible.
+---
 
-La alternativa más simple y segura es **Cloudflare Tunnel (cloudflared)**:
+Estimado Andrés, buenas tardes:
 
-- No abren puertos en su firewall.
-- No exponen MySQL a internet.
-- No requiere VPN ni IP fija.
-- La conexión es outbound desde su servidor hacia Cloudflare, completamente cifrada.
+Gracias por habilitar SSL/TLS y por el `ca.pem`. Ya lo cargamos y nuestro
+backend quedó configurado para conectarse cifrado y saliendo por las IPs que
+ustedes autorizaron.
 
-**Lo único que necesito que hagan de su lado:**
+Verificamos de nuestro lado que la salida es la correcta: nuestras pruebas
+salen por **3.223.196.67**, una de las dos IPs autorizadas
+(3.224.144.155 / 3.223.196.67).
 
-1. Instalar `cloudflared` en la máquina que tiene MySQL (o una que tenga acceso a 192.168.1.15:3306).
-2. Crear un túnel apuntando a `192.168.1.15:3306`.
+**Lo que falta para poder probar: la dirección pública del servidor.**
 
-**Lo que necesito que me compartan una vez listo:**
+La única dirección que tenemos registrada es `25.58.189.51:3306`, que es la IP
+de Hamachi. Desde internet no responde — la conexión TCP nunca llega, así que
+ni siquiera alcanzamos el handshake de MySQL donde se validaría el certificado.
 
-- **El hostname o dominio público del túnel** (algo como `xxxxx.trycloudflare.com` o un dominio propio si configuran uno).
-- **El puerto** si usan uno distinto al 3306.
+Necesitamos dos datos concretos:
 
-Con eso, configuro las variables de entorno del backend y la integración queda operativa de inmediato.
+1. **IP pública o dominio** del servidor MySQL (la IP que su ISP les asigna).
+2. **Puerto externo** publicado (3306 u otro, si lo mapearon distinto).
 
-¿Les parece viable?
+**Sobre el reenvío de puerto**
 
-Saludos,
+En correos anteriores se indicó que la conectividad/reenvío correspondía al
+equipo técnico de BAKANO. Queremos aclarar este punto: el reenvío de puerto se
+configura en el router de la red donde vive el servidor MySQL. Nosotros, desde
+fuera de esa red, no tenemos forma técnica de configurarlo — sólo puede hacerlo
+quien administra ese router (su equipo o el ISP).
+
+Nos llama la atención, además, que ustedes ya restringieron el usuario
+`crm_user` a nuestras dos IPs de origen. Esa restricción sólo tiene efecto si el
+servidor recibe conexiones desde internet, así que es probable que la
+publicación ya exista y sólo falte que nos compartan la IP y el puerto.
+
+Si la publicación aún no está hecha, quedan dos caminos:
+
+- **Opción A —** Publicar el puerto MySQL en el router hacia internet. El riesgo
+  ya está acotado: `crm_user` sólo acepta nuestras dos IPs, sólo tiene permiso
+  de lectura sobre las cinco vistas, y la sesión va cifrada con TLS.
+- **Opción B —** Un túnel saliente (Cloudflare Tunnel o similar) desde una
+  máquina de su red. No abre ningún puerto: la conexión la inicia su servidor
+  hacia afuera.
+
+Apenas tengamos la IP y el puerto, ejecutamos la validación que indican
+(`SELECT USER(), CURRENT_USER();` y `SHOW SESSION STATUS LIKE 'Ssl_cipher';`) y
+les enviamos el resultado el mismo día.
+
+Quedamos atentos.
+
+Saludos cordiales,
 
 Diego Reyes
