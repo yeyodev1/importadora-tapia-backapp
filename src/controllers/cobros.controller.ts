@@ -31,6 +31,7 @@ export const CobrosController = {
         monto,
         metodoPago,
         comprobante,
+        firma,
         observacion,
       } = req.body || {};
 
@@ -58,6 +59,8 @@ export const CobrosController = {
       }
 
       const comprobanteUrl = await uploadComprobante(comprobante);
+      // Firma digital opcional (canvas del cliente al recibir el cobro).
+      const firmaUrl = firma ? await uploadComprobante(firma, "tapia-firmas") : undefined;
 
       const cobro = await CobroModel.create({
         vendedorId: req.user!.id,
@@ -69,6 +72,7 @@ export const CobrosController = {
         monto: Number(monto),
         metodoPago,
         comprobanteUrl,
+        firmaUrl,
         observacion,
       });
 
