@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "tsc --noEmit",
-  "outputDirectory": "public",
+  "buildCommand": "",
+  "installCommand": "pnpm install --prod=false",
   "functions": {
     "api/index.ts": {
       "maxDuration": 60,
