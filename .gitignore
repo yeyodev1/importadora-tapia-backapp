@@ -5,3 +5,4 @@ uploads
 .vercel
 node-compile-cache
 certs/*.pem
+.env*
