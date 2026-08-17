@@ -13,6 +13,7 @@ export interface PedidoItem {
 }
 
 export interface IPedido extends Document {
+  numero: string;
   vendedorId: string;
   vendedorNombre: string;
   venCodigo?: string;
@@ -41,6 +42,7 @@ const itemSchema = new Schema<PedidoItem>(
 
 const pedidoSchema = new Schema<IPedido>(
   {
+    numero: { type: String, required: true, unique: true },
     vendedorId: { type: String, required: true, index: true },
     vendedorNombre: { type: String, required: true },
     venCodigo: { type: String },
