@@ -4,6 +4,7 @@ export type MetodoPago = "efectivo" | "transferencia" | "cheque" | "deposito";
 export type EstadoCobro = "registrado" | "aplicado" | "rechazado";
 
 export interface ICobro extends Document {
+  numero: string;
   vendedorId: string;
   vendedorNombre: string;
   venCodigo?: string;
@@ -21,6 +22,7 @@ export interface ICobro extends Document {
 
 const cobroSchema = new Schema<ICobro>(
   {
+    numero: { type: String, required: true, unique: true },
     vendedorId: { type: String, required: true, index: true },
     vendedorNombre: { type: String, required: true },
     venCodigo: { type: String },
