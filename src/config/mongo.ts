@@ -15,7 +15,13 @@ export async function dbConnect() {
 
   if (!connection) {
     connection = mongoose
-      .connect(DB_URI)
+      .connect(DB_URI, {
+        // Serverless: fallar rápido si Atlas no responde, en vez de dejar
+        // las operaciones en buffer 10s (causa del "buffering timed out").
+        serverSelectionTimeoutMS: 8000,
+        socketTimeoutMS: 45000,
+        maxPoolSize: 5,
+      } as any)
       .then((m) => {
         console.log("Connected to MongoDB");
         return m;
