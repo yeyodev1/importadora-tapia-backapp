@@ -1,9 +1,13 @@
 import { Request } from "express";
 
+export type UserRole = "admin" | "vendedor";
+
 export interface JwtPayload {
-  userId: string;
+  id: string;
   email: string;
-  accountType: string;
+  role: UserRole;
+  /** Código del vendedor en el ERP; sólo para role "vendedor". */
+  venCodigo?: string;
 }
 
 export interface AuthRequest extends Request {
