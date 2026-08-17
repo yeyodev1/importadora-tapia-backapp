@@ -44,14 +44,17 @@ healthRouter.get("/mysql", async (req: Request, res: Response) => {
     return;
   }
 
-  const host = process.env.MYSQL_HOST || "";
+  const tunnelHostname = process.env.MYSQL_TUNNEL_HOSTNAME || "";
+  const host = tunnelHostname || process.env.MYSQL_HOST || "";
   const target = {
     // Sin HEALTH_KEY el endpoint es público: no se revela la IP del ERP,
     // sólo si es alcanzable desde internet, que es lo que se diagnostica.
     host: expectedKey ? host : maskHost(host),
-    hostClass: classifyHost(host),
-    port: Number(process.env.MYSQL_PORT) || 3306,
-    proxy: Boolean(process.env.FIXIE_URL || process.env.FIXIE_SOCKS_HOST),
+    hostClass: tunnelHostname ? "cloudflare-tunnel" : classifyHost(host),
+    port: tunnelHostname
+      ? Number(process.env.MYSQL_TUNNEL_LOCAL_PORT) || 13306
+      : Number(process.env.MYSQL_PORT) || 3306,
+    tunnel: Boolean(tunnelHostname),
     caLoaded:
       Boolean(process.env.MYSQL_SSL_CA) ||
       existsSync(
