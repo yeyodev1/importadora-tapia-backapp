@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import http from "http";
 import routerApi from "./routes";
+import { dbConnect } from "./config/mongo";
 import { globalErrorHandler } from "./middlewares/globalErrorHandler.middleware";
 
 const whitelist = [
@@ -9,7 +10,10 @@ const whitelist = [
   "http://localhost:8080",
   "http://localhost:5173",
   "http://localhost:5174",
+  "http://localhost:5175",
   "http://localhost:8101",
+  "https://importadoratapia.app",
+  "https://www.importadoratapia.app",
   // Orígenes adicionales de producción vía env (separados por coma)
   ...(process.env.CORS_ORIGINS || "")
     .split(",")
@@ -36,6 +40,18 @@ const corsOptions: cors.CorsOptions = {
   credentials: true,
 };
 
+const ensureMongo = async (_req: any, res: any, next: any) => {
+  try {
+    await dbConnect();
+    next();
+  } catch {
+    res.status(503).json({
+      success: false,
+      message: "Base de datos no disponible temporalmente. Reintenta en unos segundos.",
+    });
+  }
+};
+
 export function createApp() {
   const app = express();
 
@@ -45,6 +61,13 @@ export function createApp() {
   app.get("/", (_req, res) => {
     res.send("Server is alive");
   });
+
+  // Serverless: garantizar que Mongo esté conectado antes de las rutas que lo
+  // usan (auth, users). Es idempotente y sólo espera en el primer request tras
+  // un cold start. Las rutas ERP (MySQL) no dependen de esto.
+  app.use("/api/auth", ensureMongo);
+  app.use("/api/users", ensureMongo);
+  app.use("/api/cobros", ensureMongo);
 
   routerApi(app);
 
