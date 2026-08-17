@@ -1,26 +1,32 @@
-import { Request, Response, NextFunction } from "express";
+import { Response, NextFunction } from "express";
 import { ErpService } from "../services/erp.service";
+import { AuthRequest } from "../types/AuthRequest";
+
+/** Los vendedores sólo ven su propia cartera; admin ve todo. */
+function scope(req: AuthRequest): string | undefined {
+  return req.user?.role === "vendedor" ? req.user.venCodigo : undefined;
+}
 
 export const ErpController = {
-  async clientes(req: Request, res: Response, next: NextFunction) {
+  async clientes(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await ErpService.getClientes();
+      const data = await ErpService.getClientes(scope(req));
       res.json({ success: true, data });
     } catch (error) {
       next(error);
     }
   },
 
-  async vendedores(req: Request, res: Response, next: NextFunction) {
+  async vendedores(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await ErpService.getVendedores();
+      const data = await ErpService.getVendedores(scope(req));
       res.json({ success: true, data });
     } catch (error) {
       next(error);
     }
   },
 
-  async inventario(req: Request, res: Response, next: NextFunction) {
+  async inventario(_req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const data = await ErpService.getInventario();
       res.json({ success: true, data });
@@ -29,18 +35,18 @@ export const ErpController = {
     }
   },
 
-  async carteraFacturas(req: Request, res: Response, next: NextFunction) {
+  async carteraFacturas(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await ErpService.getCarteraFacturas();
+      const data = await ErpService.getCarteraFacturas(scope(req));
       res.json({ success: true, data });
     } catch (error) {
       next(error);
     }
   },
 
-  async carteraConsolidada(req: Request, res: Response, next: NextFunction) {
+  async carteraConsolidada(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const data = await ErpService.getCarteraConsolidada();
+      const data = await ErpService.getCarteraConsolidada(scope(req));
       res.json({ success: true, data });
     } catch (error) {
       next(error);
