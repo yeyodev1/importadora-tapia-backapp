@@ -1,5 +1,6 @@
 import { Response, NextFunction } from "express";
 import { CobroModel } from "../models/cobro.model";
+import { nextSeq, formatDoc } from "../models/counter.model";
 import { uploadComprobante } from "../services/cloudinary.service";
 import { AuthRequest } from "../types/AuthRequest";
 
@@ -62,7 +63,9 @@ export const CobrosController = {
       // Firma digital opcional (canvas del cliente al recibir el cobro).
       const firmaUrl = firma ? await uploadComprobante(firma, "tapia-firmas") : undefined;
 
+      const numero = formatDoc("RC", await nextSeq("cobro"));
       const cobro = await CobroModel.create({
+        numero,
         vendedorId: req.user!.id,
         vendedorNombre: req.user!.email,
         venCodigo: req.user!.venCodigo,
