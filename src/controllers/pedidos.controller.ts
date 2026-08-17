@@ -1,5 +1,6 @@
 import { Response, NextFunction } from "express";
 import { PedidoModel, PedidoItem } from "../models/pedido.model";
+import { nextSeq, formatDoc } from "../models/counter.model";
 import { AuthRequest } from "../types/AuthRequest";
 
 export const PedidosController = {
@@ -60,7 +61,9 @@ export const PedidosController = {
 
       const total = Math.round(parsed.reduce((s, i) => s + i.subtotal, 0) * 100) / 100;
 
+      const numero = formatDoc("OP", await nextSeq("pedido"));
       const pedido = await PedidoModel.create({
+        numero,
         vendedorId: req.user!.id,
         vendedorNombre: req.user!.email,
         venCodigo: req.user!.venCodigo,
