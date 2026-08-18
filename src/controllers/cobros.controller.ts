@@ -1,7 +1,9 @@
 import { Response, NextFunction } from "express";
 import { CobroModel } from "../models/cobro.model";
+import { UserModel } from "../models/user.model";
 import { nextSeq, formatDoc } from "../models/counter.model";
 import { uploadComprobante } from "../services/cloudinary.service";
+import { sendMail, cobroEstadoEmail } from "../services/email.service";
 import { AuthRequest } from "../types/AuthRequest";
 
 const METODOS = ["efectivo", "transferencia", "cheque", "deposito"];
@@ -103,6 +105,22 @@ export const CobrosController = {
         return;
       }
       res.json({ success: true, data: cobro });
+
+      // Aviso al vendedor con el resultado (no bloquea la respuesta).
+      if (estado === "aplicado" || estado === "rechazado") {
+        UserModel.findById(cobro.vendedorId)
+          .then((u) => {
+            if (!u) return;
+            const mail = cobroEstadoEmail({
+              numero: cobro.numero,
+              clienteNombre: cobro.clienteNombre,
+              monto: cobro.monto,
+              estado,
+            });
+            return sendMail({ to: u.email, ...mail });
+          })
+          .catch(() => {});
+      }
     } catch (error) {
       next(error);
     }
