@@ -4,6 +4,7 @@ import { UserModel } from "../models/user.model";
 import { nextSeq, formatDoc } from "../models/counter.model";
 import { sendMail, pedidoNuevoEmail, pedidoEstadoEmail } from "../services/email.service";
 import { validarDisponibilidad } from "../services/stock.service";
+import { uploadComprobante } from "../services/cloudinary.service";
 import { AuthRequest } from "../types/AuthRequest";
 
 /** Correos de todos los administradores (para avisos de aprobación). */
@@ -30,7 +31,7 @@ export const PedidosController = {
    */
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { clienteNombre, clienteCodigo, items, observacion } = req.body || {};
+      const { clienteNombre, clienteCodigo, items, observacion, foto } = req.body || {};
 
       if (!clienteNombre) {
         res.status(400).json({ success: false, message: "El cliente es requerido" });
@@ -77,6 +78,9 @@ export const PedidosController = {
 
       const total = Math.round(parsed.reduce((s, i) => s + i.subtotal, 0) * 100) / 100;
 
+      // Imagen opcional del pedido (foto del local, nota manuscrita, etc.).
+      const fotoUrl = foto ? await uploadComprobante(foto, "tapia-pedidos") : undefined;
+
       const numero = formatDoc("OP", await nextSeq("pedido"));
       const pedido = await PedidoModel.create({
         numero,
@@ -87,6 +91,7 @@ export const PedidosController = {
         clienteCodigo,
         items: parsed,
         total,
+        fotoUrl,
         observacion,
       });
 
