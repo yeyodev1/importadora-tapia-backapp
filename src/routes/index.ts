@@ -5,6 +5,7 @@ import healthRouter from "./health.routes";
 import authRouter from "./auth.routes";
 import cobrosRouter from "./cobros.routes";
 import pedidosRouter from "./pedidos.routes";
+import inventarioRouter from "./inventario.routes";
 
 function routerApi(app: Application) {
   const router = express.Router();
@@ -16,6 +17,7 @@ function routerApi(app: Application) {
   router.use("/users", usersRouter);
   router.use("/cobros", cobrosRouter);
   router.use("/pedidos", pedidosRouter);
+  router.use("/inventario", inventarioRouter);
 }
 
 export default routerApi;
