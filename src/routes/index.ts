@@ -6,6 +6,7 @@ import authRouter from "./auth.routes";
 import cobrosRouter from "./cobros.routes";
 import pedidosRouter from "./pedidos.routes";
 import inventarioRouter from "./inventario.routes";
+import estadoRouter from "./estado.routes";
 
 function routerApi(app: Application) {
   const router = express.Router();
@@ -18,6 +19,7 @@ function routerApi(app: Application) {
   router.use("/cobros", cobrosRouter);
   router.use("/pedidos", pedidosRouter);
   router.use("/inventario", inventarioRouter);
+  router.use("/estado", estadoRouter);
 }
 
 export default routerApi;
