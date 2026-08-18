@@ -1,7 +1,15 @@
 import { Response, NextFunction } from "express";
 import { PedidoModel, PedidoItem } from "../models/pedido.model";
+import { UserModel } from "../models/user.model";
 import { nextSeq, formatDoc } from "../models/counter.model";
+import { sendMail, pedidoNuevoEmail, pedidoEstadoEmail } from "../services/email.service";
 import { AuthRequest } from "../types/AuthRequest";
+
+/** Correos de todos los administradores (para avisos de aprobación). */
+async function adminEmails(): Promise<string[]> {
+  const admins = await UserModel.find({ role: "admin" }).select("email");
+  return admins.map((a) => a.email);
+}
 
 export const PedidosController = {
   async list(req: AuthRequest, res: Response, next: NextFunction) {
@@ -75,6 +83,18 @@ export const PedidosController = {
       });
 
       res.status(201).json({ success: true, data: pedido });
+
+      // Aviso a administración (no bloquea la respuesta).
+      const mail = pedidoNuevoEmail({
+        numero,
+        clienteNombre,
+        vendedor: req.user!.email,
+        total,
+        nItems: parsed.length,
+      });
+      adminEmails()
+        .then((emails) => Promise.all(emails.map((to) => sendMail({ to, ...mail }))))
+        .catch(() => {});
     } catch (error) {
       next(error);
     }
@@ -98,6 +118,23 @@ export const PedidosController = {
         return;
       }
       res.json({ success: true, data: pedido });
+
+      // Aviso al vendedor con el resultado (no bloquea la respuesta).
+      if (estado === "aprobado" || estado === "rechazado") {
+        UserModel.findById(pedido.vendedorId)
+          .then((u) => {
+            if (!u) return;
+            const mail = pedidoEstadoEmail({
+              numero: pedido.numero,
+              clienteNombre: pedido.clienteNombre,
+              total: pedido.total,
+              estado,
+              motivoRechazo: pedido.motivoRechazo,
+            });
+            return sendMail({ to: u.email, ...mail });
+          })
+          .catch(() => {});
+      }
     } catch (error) {
       next(error);
     }
