@@ -1,5 +1,12 @@
 import { PedidoModel } from "../models/pedido.model";
 import { ErpService } from "./erp.service";
+import { cachedRead } from "./erpCache.service";
+
+/** Inventario del ERP con respaldo en cache (nunca rompe si el túnel cae). */
+async function inventarioErp(): Promise<any[]> {
+  const r = await cachedRead("inventario", () => ErpService.getInventario() as Promise<any[]>);
+  return r.data;
+}
 
 /** Clave única de un producto en una bodega. */
 function key(codigo: string, bodega?: string): string {
@@ -43,7 +50,7 @@ interface DisponibleItem {
  */
 export async function inventarioDisponible(): Promise<DisponibleItem[]> {
   const [inv, reservas] = await Promise.all([
-    ErpService.getInventario() as Promise<any[]>,
+    inventarioErp(),
     reservasActivas(),
   ]);
 
@@ -66,7 +73,7 @@ export async function validarDisponibilidad(
   items: { productoCodigo: string; productoNombre: string; bodega?: string; cantidad: number }[]
 ): Promise<string | null> {
   const [inv, reservas] = await Promise.all([
-    ErpService.getInventario() as Promise<any[]>,
+    inventarioErp(),
     reservasActivas(),
   ]);
 
