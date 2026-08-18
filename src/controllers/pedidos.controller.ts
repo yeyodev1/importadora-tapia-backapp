@@ -3,6 +3,7 @@ import { PedidoModel, PedidoItem } from "../models/pedido.model";
 import { UserModel } from "../models/user.model";
 import { nextSeq, formatDoc } from "../models/counter.model";
 import { sendMail, pedidoNuevoEmail, pedidoEstadoEmail } from "../services/email.service";
+import { validarDisponibilidad } from "../services/stock.service";
 import { AuthRequest } from "../types/AuthRequest";
 
 /** Correos de todos los administradores (para avisos de aprobación). */
@@ -65,6 +66,13 @@ export const PedidosController = {
           precioUnitario,
           subtotal: Math.round(cantidad * precioUnitario * 100) / 100,
         });
+      }
+
+      // Reserva al enviar: bloquear si supera el disponible (stock ERP - reservas).
+      const errorStock = await validarDisponibilidad(parsed);
+      if (errorStock) {
+        res.status(409).json({ success: false, message: `Sin stock disponible. ${errorStock}` });
+        return;
       }
 
       const total = Math.round(parsed.reduce((s, i) => s + i.subtotal, 0) * 100) / 100;
