@@ -21,6 +21,7 @@ export interface IPedido extends Document {
   clienteCodigo?: string;
   items: PedidoItem[];
   total: number;
+  fotoUrl?: string;
   observacion?: string;
   motivoRechazo?: string;
   estado: EstadoPedido;
@@ -50,6 +51,7 @@ const pedidoSchema = new Schema<IPedido>(
     clienteCodigo: { type: String },
     items: { type: [itemSchema], required: true },
     total: { type: Number, required: true, min: 0 },
+    fotoUrl: { type: String },
     observacion: { type: String },
     motivoRechazo: { type: String },
     // El vendedor SIEMPRE puede enviar; administración aprueba o rechaza.
