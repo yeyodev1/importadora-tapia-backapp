@@ -69,6 +69,7 @@ export function createApp() {
   app.use("/api/users", ensureMongo);
   app.use("/api/cobros", ensureMongo);
   app.use("/api/pedidos", ensureMongo);
+  app.use("/api/inventario", ensureMongo);
 
   routerApi(app);
 
