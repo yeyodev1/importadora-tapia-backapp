@@ -75,7 +75,10 @@ export function pedidoNuevoEmail(p: {
   vendedor: string;
   total: number;
   nItems: number;
+  plazoCreditoDias?: number;
 }): { subject: string; html: string } {
+  const plazo =
+    p.plazoCreditoDias === undefined ? "" : p.plazoCreditoDias === 0 ? "Contado" : `${p.plazoCreditoDias} días`;
   return {
     subject: `Nuevo pedido ${p.numero} · requiere aprobación`,
     html: shell(
@@ -86,6 +89,7 @@ export function pedidoNuevoEmail(p: {
          <tr><td style="padding:8px 14px;color:#6b7280">Cliente</td><td style="padding:8px 14px;font-weight:bold">${p.clienteNombre}</td></tr>
          <tr><td style="padding:8px 14px;color:#6b7280">Productos</td><td style="padding:8px 14px">${p.nItems}</td></tr>
          <tr><td style="padding:8px 14px;color:#6b7280">Total</td><td style="padding:8px 14px;font-weight:bold;color:#2094D2">${money(p.total)}</td></tr>
+         ${plazo ? `<tr><td style="padding:8px 14px;color:#6b7280">Plazo de crédito</td><td style="padding:8px 14px;font-weight:bold">${plazo}</td></tr>` : ""}
        </table>`
     ),
   };
