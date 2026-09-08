@@ -6,6 +6,7 @@ import { sendMail, pedidoNuevoEmail, pedidoEstadoEmail } from "../services/email
 import { validarDisponibilidad } from "../services/stock.service";
 import { uploadComprobante } from "../services/cloudinary.service";
 import { AuthRequest } from "../types/AuthRequest";
+import { validarSoloContado } from "../services/reglasProducto.service";
 
 /** Correos de todos los administradores (para avisos de aprobación). */
 async function adminEmails(): Promise<string[]> {
@@ -74,6 +75,13 @@ export const PedidosController = {
           precioUnitario,
           subtotal: Math.round(cantidad * precioUnitario * 100) / 100,
         });
+      }
+
+      // Productos marcados "solo contado" no pueden ir en un pedido a crédito.
+      const errorContado = await validarSoloContado(parsed, plazo);
+      if (errorContado) {
+        res.status(400).json({ success: false, message: errorContado });
+        return;
       }
 
       // Reserva al enviar: bloquear si supera el disponible (stock ERP - reservas).
