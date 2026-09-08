@@ -31,10 +31,17 @@ export const PedidosController = {
    */
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { clienteNombre, clienteCodigo, items, observacion, foto } = req.body || {};
+      const { clienteNombre, clienteCodigo, items, observacion, foto, plazoCreditoDias } = req.body || {};
 
       if (!clienteNombre) {
         res.status(400).json({ success: false, message: "El cliente es requerido" });
+        return;
+      }
+      // El plazo de crédito es obligatorio: sin él administración no puede
+      // programar el cobro. 0 = contado.
+      const plazo = Number(plazoCreditoDias);
+      if (plazoCreditoDias === undefined || plazoCreditoDias === null || plazoCreditoDias === "" || !Number.isInteger(plazo) || plazo < 0 || plazo > 365) {
+        res.status(400).json({ success: false, message: "Indica el plazo de crédito del pedido (contado o días)" });
         return;
       }
       if (!Array.isArray(items) || items.length === 0) {
@@ -91,6 +98,7 @@ export const PedidosController = {
         clienteCodigo,
         items: parsed,
         total,
+        plazoCreditoDias: plazo,
         fotoUrl,
         observacion,
       });
@@ -104,6 +112,7 @@ export const PedidosController = {
         vendedor: req.user!.email,
         total,
         nItems: parsed.length,
+        plazoCreditoDias: plazo,
       });
       adminEmails()
         .then((emails) => Promise.all(emails.map((to) => sendMail({ to, ...mail }))))
