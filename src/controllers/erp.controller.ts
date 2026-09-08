@@ -1,6 +1,8 @@
 import { Response, NextFunction } from "express";
 import { ErpService } from "../services/erp.service";
 import { cachedRead } from "../services/erpCache.service";
+import { filtrarInventario } from "../services/asignacionInventario.service";
+import { marcarSoloContado } from "../services/reglasProducto.service";
 import { AuthRequest } from "../types/AuthRequest";
 
 /** Los vendedores sólo ven su propia cartera; admin ve todo. */
@@ -52,9 +54,16 @@ export const ErpController = {
     }
   },
 
-  async inventario(_req: AuthRequest, res: Response, next: NextFunction) {
+  async inventario(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      sendCached(res, await cachedRead("inventario", () => ErpService.getInventario() as any));
+      // El inventario del ERP es uno solo; lo que cambia es qué parte ve cada vendedor.
+      const r = await cachedRead("inventario", () => ErpService.getInventario() as any);
+      const { data, asignacion } = await filtrarInventario(r.data as any[], req.user);
+      res.json({
+        success: true,
+        data: await marcarSoloContado(data),
+        meta: { stale: r.stale, updatedAt: r.updatedAt, source: r.stale ? "cache" : "erp", error: r.error, asignacion },
+      });
     } catch (error) {
       next(error);
     }
