@@ -21,6 +21,8 @@ export interface IPedido extends Document {
   clienteCodigo?: string;
   items: PedidoItem[];
   total: number;
+  /** Plazo de crédito acordado con el cliente, en días (0 = contado). Obligatorio. */
+  plazoCreditoDias: number;
   fotoUrl?: string;
   observacion?: string;
   motivoRechazo?: string;
@@ -51,6 +53,7 @@ const pedidoSchema = new Schema<IPedido>(
     clienteCodigo: { type: String },
     items: { type: [itemSchema], required: true },
     total: { type: Number, required: true, min: 0 },
+    plazoCreditoDias: { type: Number, required: true, min: 0, max: 365 },
     fotoUrl: { type: String },
     observacion: { type: String },
     motivoRechazo: { type: String },
