@@ -38,7 +38,7 @@ export const UsersController = {
         res.status(400).json({ success: false, message: "email, password y role son requeridos" });
         return;
       }
-      if (!["admin", "vendedor"].includes(role)) {
+      if (!["admin", "vendedor", "bodega"].includes(role)) {
         res.status(400).json({ success: false, message: "role inválido" });
         return;
       }
@@ -67,7 +67,7 @@ export const UsersController = {
       }
 
       if (!finalName) {
-        res.status(400).json({ success: false, message: "name es requerido para administradores" });
+        res.status(400).json({ success: false, message: "El nombre es requerido" });
         return;
       }
 
