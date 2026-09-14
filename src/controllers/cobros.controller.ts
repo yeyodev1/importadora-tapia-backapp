@@ -5,6 +5,7 @@ import { nextSeq, formatDoc } from "../models/counter.model";
 import { uploadComprobante } from "../services/cloudinary.service";
 import { sendMail, cobroEstadoEmail } from "../services/email.service";
 import { AuthRequest } from "../types/AuthRequest";
+import { carteraDelUsuario, clienteDelUsuario, numeroImpreso } from "../services/carteraUsuario.service";
 
 const METODOS = ["efectivo", "transferencia", "cheque", "deposito"];
 
@@ -61,6 +62,24 @@ export const CobrosController = {
         return;
       }
 
+      // El cobro siempre es a un cliente que ya existe en la cartera del usuario.
+      const cliente = clienteCodigo ? await clienteDelUsuario(req, String(clienteCodigo)) : null;
+      if (!cliente) {
+        res.status(400).json({ success: false, message: "Elige un cliente existente de tu cartera" });
+        return;
+      }
+      // Si indica factura, debe ser una factura pendiente de ese mismo cliente.
+      if (facturaRef) {
+        const cartera = await carteraDelUsuario(req);
+        const deEseCliente = cartera.some(
+          (f) => f.per_nombre === cliente.per_nombre && numeroImpreso(f) === String(facturaRef)
+        );
+        if (!deEseCliente) {
+          res.status(400).json({ success: false, message: "La factura elegida no pertenece a ese cliente" });
+          return;
+        }
+      }
+
       const comprobanteUrl = await uploadComprobante(comprobante);
       // Firma digital opcional (canvas del cliente al recibir el cobro).
       const firmaUrl = firma ? await uploadComprobante(firma, "tapia-firmas") : undefined;
@@ -71,9 +90,9 @@ export const CobrosController = {
         vendedorId: req.user!.id,
         vendedorNombre: req.user!.email,
         venCodigo: req.user!.venCodigo,
-        clienteNombre,
-        clienteCodigo,
-        facturaRef,
+        clienteNombre: cliente.per_nombre,
+        clienteCodigo: String(cliente.per_codigo),
+        facturaRef: facturaRef ? String(facturaRef) : undefined,
         monto: Number(monto),
         metodoPago,
         comprobanteUrl,
