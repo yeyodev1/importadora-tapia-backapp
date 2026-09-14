@@ -4,7 +4,7 @@ import { UserModel } from "../models/user.model";
 import { nextSeq, formatDoc } from "../models/counter.model";
 import { sendMail, pedidoNuevoEmail, pedidoEstadoEmail } from "../services/email.service";
 import { validarDisponibilidad } from "../services/stock.service";
-import { uploadComprobante } from "../services/cloudinary.service";
+import { uploadComprobante, esUrlCloudinaryPropia, firmaSubidaDirecta } from "../services/cloudinary.service";
 import { AuthRequest } from "../types/AuthRequest";
 import { validarSoloContado } from "../services/reglasProducto.service";
 
@@ -32,7 +32,7 @@ export const PedidosController = {
    */
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { clienteNombre, clienteCodigo, items, observacion, foto, plazoCreditoDias } = req.body || {};
+      const { clienteNombre, clienteCodigo, items, observacion, foto, fotoUrl, fotos, plazoCreditoDias } = req.body || {};
 
       if (!clienteNombre) {
         res.status(400).json({ success: false, message: "El cliente es requerido" });
@@ -93,8 +93,17 @@ export const PedidosController = {
 
       const total = Math.round(parsed.reduce((s, i) => s + i.subtotal, 0) * 100) / 100;
 
-      // Imagen opcional del pedido (foto del local, nota manuscrita, etc.).
-      const fotoUrl = foto ? await uploadComprobante(foto, "tapia-pedidos") : undefined;
+      // Foto de la orden de pedido (OP): la app la sube directo a Cloudinary y
+      // manda la URL. El data URI se mantiene para celulares con la versión anterior.
+      // Puede tener varias fotos (hojas, anotaciones, restricciones del cliente).
+      const listaFotos: string[] = Array.isArray(fotos)
+        ? fotos.map(String).slice(0, 10)
+        : fotoUrl ? [String(fotoUrl)] : [];
+      if (listaFotos.some((u) => !esUrlCloudinaryPropia(u))) {
+        res.status(400).json({ success: false, message: "Foto de la orden de pedido con enlace no permitido" });
+        return;
+      }
+      if (!listaFotos.length && foto) listaFotos.push(await uploadComprobante(foto, "tapia-pedidos"));
 
       const numero = formatDoc("OP", await nextSeq("pedido"));
       const pedido = await PedidoModel.create({
@@ -107,7 +116,8 @@ export const PedidosController = {
         items: parsed,
         total,
         plazoCreditoDias: plazo,
-        fotoUrl,
+        fotoUrl: listaFotos[0],
+        fotos: listaFotos.length ? listaFotos : undefined,
         observacion,
       });
 
@@ -125,6 +135,20 @@ export const PedidosController = {
       adminEmails()
         .then((emails) => Promise.all(emails.map((to) => sendMail({ to, ...mail }))))
         .catch(() => {});
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /** Firma para subir la foto de la orden de pedido directo a Cloudinary desde el celular. */
+  async firmaSubida(_req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const firma = firmaSubidaDirecta("tapia-pedidos");
+      if (!firma) {
+        res.status(503).json({ success: false, message: "La subida de fotos no está configurada (Cloudinary)" });
+        return;
+      }
+      res.json({ success: true, data: firma });
     } catch (error) {
       next(error);
     }
