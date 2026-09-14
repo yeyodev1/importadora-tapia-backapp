@@ -47,7 +47,7 @@ export const PedidosController = {
         return;
       }
       if (!Array.isArray(items) || items.length === 0) {
-        res.status(400).json({ success: false, message: "Agrega al menos un producto" });
+        res.status(400).json({ success: false, message: "Selecciona al menos un producto del inventario" });
         return;
       }
 
@@ -63,8 +63,8 @@ export const PedidosController = {
           res.status(400).json({ success: false, message: `Cantidad inválida para ${it.productoNombre}` });
           return;
         }
-        if (!(precioUnitario >= 0)) {
-          res.status(400).json({ success: false, message: `Precio inválido para ${it.productoNombre}` });
+        if (!(precioUnitario > 0)) {
+          res.status(400).json({ success: false, message: `Indica el precio de ${it.productoNombre}` });
           return;
         }
         parsed.push({
