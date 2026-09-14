@@ -43,3 +43,28 @@ export async function uploadComprobante(
   if (!data.secure_url) throw new Error("Cloudinary no devolvió secure_url");
   return data.secure_url;
 }
+
+/**
+ * Firma para que el navegador suba un archivo DIRECTO a Cloudinary (imágenes o
+ * PDF). Así los documentos pesados no pasan por la función de Vercel (4.5 MB).
+ * Devuelve null si Cloudinary no está configurado.
+ */
+export function firmaSubidaDirecta(folder: string) {
+  const cloud = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+  if (!cloud || !apiKey || !apiSecret) return null;
+
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signature = crypto
+    .createHash("sha1")
+    .update(`folder=${folder}&timestamp=${timestamp}${apiSecret}`)
+    .digest("hex");
+  return { cloudName: cloud, apiKey, timestamp, signature, folder };
+}
+
+/** Solo se aceptan documentos alojados en nuestra cuenta de Cloudinary. */
+export function esUrlCloudinaryPropia(url: string): boolean {
+  const cloud = process.env.CLOUDINARY_CLOUD_NAME;
+  return Boolean(cloud) && url.startsWith(`https://res.cloudinary.com/${cloud}/`);
+}
