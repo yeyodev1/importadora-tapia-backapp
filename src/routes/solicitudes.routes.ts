@@ -2,10 +2,11 @@ import { Router } from "express";
 import { SolicitudesController } from "../controllers/solicitudes.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { adminOnly } from "../middlewares/adminOnly.middleware";
+import { sinBodega } from "../middlewares/roles.middleware";
 
 const solicitudesRouter = Router();
 
-solicitudesRouter.use(authMiddleware);
+solicitudesRouter.use(authMiddleware, sinBodega);
 
 solicitudesRouter.post("/firma-subida", SolicitudesController.firmaSubida);
 solicitudesRouter.get("/", SolicitudesController.list);
