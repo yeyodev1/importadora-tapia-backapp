@@ -11,5 +11,6 @@ pedidosRouter.post("/firma-subida", PedidosController.firmaSubida);
 pedidosRouter.get("/", PedidosController.list);
 pedidosRouter.post("/", PedidosController.create);
 pedidosRouter.patch("/:id/estado", adminOnly, PedidosController.updateEstado);
+pedidosRouter.patch("/:id/fotos", PedidosController.updateFotos);
 
 export default pedidosRouter;
