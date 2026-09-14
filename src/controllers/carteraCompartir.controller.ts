@@ -1,9 +1,8 @@
 import { Response, NextFunction } from "express";
 import { AuthRequest } from "../types/AuthRequest";
-import { ErpService } from "../services/erp.service";
-import { cachedRead } from "../services/erpCache.service";
 import { sendMail, MAIL_FROM_APP } from "../services/email.service";
 import { facturaSaldoEmail } from "../services/cartera.email";
+import { facturaDelUsuario } from "../services/carteraUsuario.service";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -22,10 +21,7 @@ export const CarteraCompartirController = {
         return;
       }
 
-      const scope = req.user?.role === "vendedor" ? req.user.venCodigo : undefined;
-      const key = scope ? `cartera_facturas:${scope}` : "cartera_facturas";
-      const r = await cachedRead(key, () => ErpService.getCarteraFacturas(scope) as Promise<any[]>);
-      const factura = (r.data as any[]).find((f) => String(f.trc_codigo) === String(req.params.codigo));
+      const factura = await facturaDelUsuario(req, String(req.params.codigo));
       if (!factura) {
         res.status(404).json({ success: false, message: "Factura no encontrada en tu cartera" });
         return;
