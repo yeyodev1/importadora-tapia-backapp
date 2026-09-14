@@ -91,13 +91,29 @@ export const UsersController = {
 
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { name, password, venCodigo } = req.body || {};
+      const { email, name, password, venCodigo } = req.body || {};
       const user = await UserModel.findById(req.params.id).select("+password");
       if (!user) {
         res.status(404).json({ success: false, message: "Usuario no encontrado" });
         return;
       }
 
+      // Cambio de correo (usuario de acceso): formato válido y sin repetir.
+      if (email !== undefined) {
+        const nuevo = String(email).trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nuevo)) {
+          res.status(400).json({ success: false, message: "Correo inválido" });
+          return;
+        }
+        if (nuevo !== user.email) {
+          const ocupado = await UserModel.findOne({ email: nuevo, _id: { $ne: user._id } });
+          if (ocupado) {
+            res.status(409).json({ success: false, message: "Ya existe un usuario con ese correo" });
+            return;
+          }
+          user.email = nuevo;
+        }
+      }
       if (name) user.name = name;
       if (password) user.password = password;
       if (venCodigo !== undefined && user.role === "vendedor") {
