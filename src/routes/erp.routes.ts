@@ -1,5 +1,6 @@
 import { Router, Response, NextFunction } from "express";
 import { ErpController } from "../controllers/erp.controller";
+import { CarteraCompartirController } from "../controllers/carteraCompartir.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { AuthRequest } from "../types/AuthRequest";
 
@@ -24,5 +25,7 @@ erpRouter.get("/vendedores", ErpController.vendedores);
 erpRouter.get("/inventario", ErpController.inventario);
 erpRouter.get("/cartera/facturas", ErpController.carteraFacturas);
 erpRouter.get("/cartera/consolidada", ErpController.carteraConsolidada);
+// Enviar el saldo de una factura por correo (desde app@importadoratapia.app).
+erpRouter.post("/cartera/facturas/:codigo/enviar", CarteraCompartirController.enviarCorreo);
 
 export default erpRouter;
