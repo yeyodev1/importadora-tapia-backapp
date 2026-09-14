@@ -21,6 +21,15 @@ erpRouter.use((req: AuthRequest, res: Response, next: NextFunction) => {
   next();
 });
 
+// Bodega solo consulta el inventario del ERP (sin clientes ni cartera).
+erpRouter.use((req: AuthRequest, res: Response, next: NextFunction) => {
+  if (req.user?.role === "bodega" && !(req.method === "GET" && req.path === "/inventario")) {
+    res.status(403).json({ success: false, message: "Bodega solo tiene acceso al inventario" });
+    return;
+  }
+  next();
+});
+
 erpRouter.get("/clientes", ErpController.clientes);
 erpRouter.get("/vendedores", ErpController.vendedores);
 erpRouter.get("/inventario", ErpController.inventario);
