@@ -72,6 +72,7 @@ export function createApp() {
   app.use("/api/inventario", ensureMongo);
   app.use("/api/estado", ensureMongo);
   app.use("/api/visitas", ensureMongo);
+  app.use("/api/solicitudes", ensureMongo);
   // Las vistas del ERP usan cache en Mongo como respaldo, así que también
   // necesitan la conexión a Mongo garantizada.
   app.use("/api/erp", ensureMongo);
