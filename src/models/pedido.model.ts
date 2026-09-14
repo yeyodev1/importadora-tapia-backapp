@@ -26,6 +26,8 @@ export interface IPedido extends Document {
   fotoUrl?: string;
   /** Fotos de la orden de pedido en papel (fotoUrl es la primera, por compatibilidad). */
   fotos?: string[];
+  /** Salida de bodega: hora del servidor, fotos y quién la marcó. */
+  despacho?: { salidaAt: Date; fotos: string[]; observacion?: string; despachadoPor: string };
   observacion?: string;
   motivoRechazo?: string;
   estado: EstadoPedido;
@@ -58,6 +60,18 @@ const pedidoSchema = new Schema<IPedido>(
     plazoCreditoDias: { type: Number, required: true, min: 0, max: 365 },
     fotoUrl: { type: String },
     fotos: { type: [String], default: undefined },
+    despacho: {
+      type: new Schema(
+        {
+          salidaAt: { type: Date, required: true },
+          fotos: { type: [String], default: [] },
+          observacion: { type: String },
+          despachadoPor: { type: String, required: true },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
     observacion: { type: String },
     motivoRechazo: { type: String },
     // El vendedor SIEMPRE puede enviar; administración aprueba o rechaza.
