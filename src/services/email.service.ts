@@ -153,7 +153,7 @@ export function welcomeEmail(params: {
   role: string;
 }): { subject: string; html: string } {
   const appUrl = process.env.APP_URL || "https://importadoratapia.app";
-  const rol = params.role === "admin" ? "Administrador" : "Vendedor";
+  const rol = params.role === "admin" ? "Administrador" : params.role === "bodega" ? "Bodega" : "Vendedor";
   return {
     subject: "Tu acceso al CRM de Importadora Tapia",
     html: `
