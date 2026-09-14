@@ -1,6 +1,6 @@
 import { Request } from "express";
 
-export type UserRole = "admin" | "vendedor";
+export type UserRole = "admin" | "vendedor" | "bodega";
 
 export interface JwtPayload {
   id: string;
