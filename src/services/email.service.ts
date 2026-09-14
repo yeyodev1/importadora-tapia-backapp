@@ -8,9 +8,16 @@ interface SendMailInput {
   to: string;
   subject: string;
   html: string;
+  /** Remitente puntual (por defecto MAIL_FROM). */
+  from?: string;
+  /** A quién le llegan las respuestas (p.ej. el vendedor que envió). */
+  replyTo?: string;
 }
 
-export async function sendMail({ to, subject, html }: SendMailInput): Promise<boolean> {
+/** Remitente de los correos que la app manda a clientes. Requiere el dominio verificado en Resend. */
+export const MAIL_FROM_APP = process.env.MAIL_FROM_APP || "Importadora Tapia <app@importadoratapia.app>";
+
+export async function sendMail({ to, subject, html, from, replyTo }: SendMailInput): Promise<boolean> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.warn("[Email] RESEND_API_KEY no configurada; correo omitido:", subject);
@@ -25,10 +32,11 @@ export async function sendMail({ to, subject, html }: SendMailInput): Promise<bo
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: process.env.MAIL_FROM || "Importadora Tapia CRM <onboarding@resend.dev>",
+        from: from || process.env.MAIL_FROM || "Importadora Tapia CRM <onboarding@resend.dev>",
         to: [to],
         subject,
         html,
+        ...(replyTo ? { reply_to: replyTo } : {}),
       }),
     });
 
@@ -53,7 +61,7 @@ function money(n: number): string {
   return new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD" }).format(n);
 }
 
-function shell(title: string, body: string): string {
+export function shell(title: string, body: string): string {
   const appUrl = process.env.APP_URL || "https://importadoratapia.app";
   return `
 <div style="${baseStyles};max-width:520px;margin:0 auto;padding:24px">
