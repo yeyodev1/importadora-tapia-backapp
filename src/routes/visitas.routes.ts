@@ -1,10 +1,11 @@
 import { Router } from "express";
 import { VisitasController } from "../controllers/visitas.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
+import { sinBodega } from "../middlewares/roles.middleware";
 
 const visitasRouter = Router();
 
-visitasRouter.use(authMiddleware);
+visitasRouter.use(authMiddleware, sinBodega);
 
 visitasRouter.get("/", VisitasController.list);
 visitasRouter.post("/", VisitasController.entrada);
