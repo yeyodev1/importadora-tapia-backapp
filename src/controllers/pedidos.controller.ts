@@ -1,4 +1,5 @@
 import { Response, NextFunction } from "express";
+import mongoose from "mongoose";
 import { PedidoModel, PedidoItem } from "../models/pedido.model";
 import { UserModel } from "../models/user.model";
 import { nextSeq, formatDoc } from "../models/counter.model";
@@ -135,6 +136,38 @@ export const PedidosController = {
       adminEmails()
         .then((emails) => Promise.all(emails.map((to) => sendMail({ to, ...mail }))))
         .catch(() => {});
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /** Agregar, cambiar o quitar fotos de la OP de un pedido ya enviado (su vendedor o un admin). */
+  async updateFotos(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { fotos } = req.body || {};
+      if (!Array.isArray(fotos) || fotos.length > 10) {
+        res.status(400).json({ success: false, message: "Envía hasta 10 fotos de la orden de pedido" });
+        return;
+      }
+      const lista = fotos.map(String);
+      if (lista.some((u) => !esUrlCloudinaryPropia(u))) {
+        res.status(400).json({ success: false, message: "Foto de la orden de pedido con enlace no permitido" });
+        return;
+      }
+      const id = String(req.params.id);
+      const pedido = mongoose.isValidObjectId(id) ? await PedidoModel.findById(id) : null;
+      if (!pedido) {
+        res.status(404).json({ success: false, message: "Pedido no encontrado" });
+        return;
+      }
+      if (req.user?.role !== "admin" && pedido.vendedorId !== req.user?.id) {
+        res.status(403).json({ success: false, message: "Solo el vendedor del pedido o un administrador puede cambiar sus fotos" });
+        return;
+      }
+      pedido.fotos = lista;
+      pedido.fotoUrl = lista.length ? lista[0] : undefined;
+      await pedido.save();
+      res.json({ success: true, data: pedido });
     } catch (error) {
       next(error);
     }
