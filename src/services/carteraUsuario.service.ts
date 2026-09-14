@@ -16,6 +16,14 @@ export async function facturaDelUsuario(req: AuthRequest, codigo: string): Promi
   return cartera.find((f) => String(f.trc_codigo) === String(codigo)) || null;
 }
 
+/** Un cliente de la cartera del usuario (un vendedor, solo los suyos), o null. */
+export async function clienteDelUsuario(req: AuthRequest, codigo: string): Promise<any | null> {
+  const scope = req.user?.role === "vendedor" ? req.user.venCodigo : undefined;
+  const key = scope ? `clientes:${scope}` : "clientes";
+  const r = await cachedRead(key, () => ErpService.getClientes(scope) as Promise<any[]>);
+  return (r.data as any[]).find((c) => String(c.per_codigo) === String(codigo)) || null;
+}
+
 export function numeroImpreso(f: any): string {
   return f.numero_factura_impreso || [f.trc_serdoc, f.trc_numdoc].filter(Boolean).join("-");
 }
