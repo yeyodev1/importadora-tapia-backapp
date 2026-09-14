@@ -7,6 +7,7 @@ const pedidosRouter = Router();
 
 pedidosRouter.use(authMiddleware);
 
+pedidosRouter.post("/firma-subida", PedidosController.firmaSubida);
 pedidosRouter.get("/", PedidosController.list);
 pedidosRouter.post("/", PedidosController.create);
 pedidosRouter.patch("/:id/estado", adminOnly, PedidosController.updateEstado);
