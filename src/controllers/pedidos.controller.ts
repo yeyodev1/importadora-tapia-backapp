@@ -195,6 +195,14 @@ export const PedidosController = {
         res.status(400).json({ success: false, message: "Estado inválido" });
         return;
       }
+      // Un pedido que ya salió de bodega no cambia de estado.
+      const actual = mongoose.isValidObjectId(String(req.params.id))
+        ? await PedidoModel.findById(req.params.id).select("despacho")
+        : null;
+      if (actual?.despacho?.salidaAt) {
+        res.status(409).json({ success: false, message: "El pedido ya salió de bodega: no se puede cambiar su estado" });
+        return;
+      }
       const pedido = await PedidoModel.findByIdAndUpdate(
         req.params.id,
         { estado, ...(motivoRechazo ? { motivoRechazo } : {}) },
