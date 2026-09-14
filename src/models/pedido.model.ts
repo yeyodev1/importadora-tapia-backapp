@@ -24,6 +24,8 @@ export interface IPedido extends Document {
   /** Plazo de crédito acordado con el cliente, en días (0 = contado). Obligatorio. */
   plazoCreditoDias: number;
   fotoUrl?: string;
+  /** Fotos de la orden de pedido en papel (fotoUrl es la primera, por compatibilidad). */
+  fotos?: string[];
   observacion?: string;
   motivoRechazo?: string;
   estado: EstadoPedido;
@@ -55,6 +57,7 @@ const pedidoSchema = new Schema<IPedido>(
     total: { type: Number, required: true, min: 0 },
     plazoCreditoDias: { type: Number, required: true, min: 0, max: 365 },
     fotoUrl: { type: String },
+    fotos: { type: [String], default: undefined },
     observacion: { type: String },
     motivoRechazo: { type: String },
     // El vendedor SIEMPRE puede enviar; administración aprueba o rechaza.
