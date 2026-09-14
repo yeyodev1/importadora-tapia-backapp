@@ -23,7 +23,7 @@ const userSchema = new Schema<IUser>(
     },
     password: { type: String, required: true, select: false },
     name: { type: String, required: true, trim: true },
-    role: { type: String, enum: ["admin", "vendedor"], default: "vendedor" },
+    role: { type: String, enum: ["admin", "vendedor", "bodega"], default: "vendedor" },
     venCodigo: { type: String },
   },
   { timestamps: true }
