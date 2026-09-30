@@ -8,6 +8,7 @@ import { validarDisponibilidad } from "../services/stock.service";
 import { uploadComprobante, esUrlCloudinaryPropia, firmaSubidaDirecta } from "../services/cloudinary.service";
 import { AuthRequest } from "../types/AuthRequest";
 import { validarSoloContado } from "../services/reglasProducto.service";
+import { validarBodegaVendedor } from "../services/asignacionInventario.service";
 
 /** Correos de todos los administradores (para avisos de aprobación). */
 async function adminEmails(): Promise<string[]> {
@@ -76,6 +77,13 @@ export const PedidosController = {
           precioUnitario,
           subtotal: Math.round(cantidad * precioUnitario * 100) / 100,
         });
+      }
+
+      // El vendedor solo vende del stock de su bodega asignada.
+      const errorBodega = await validarBodegaVendedor(parsed, req.user);
+      if (errorBodega) {
+        res.status(400).json({ success: false, message: errorBodega });
+        return;
       }
 
       // Productos marcados "solo contado" no pueden ir en un pedido a crédito.
