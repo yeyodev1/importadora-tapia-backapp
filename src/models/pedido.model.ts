@@ -12,6 +12,16 @@ export interface PedidoItem {
   subtotal: number;
 }
 
+/** Despacho que no pudo salir el día previsto: cuándo sale y por qué. */
+export interface RetrasoDespacho {
+  /** Cuándo se registró (hora del servidor): el día que no salió. */
+  registradoAt: Date;
+  /** Nueva fecha de salida, "YYYY-MM-DD" en hora de Ecuador. */
+  nuevaFecha: string;
+  motivo: string;
+  registradoPor: string;
+}
+
 export interface IPedido extends Document {
   numero: string;
   vendedorId: string;
@@ -28,6 +38,8 @@ export interface IPedido extends Document {
   fotos?: string[];
   /** Salida de bodega: hora del servidor, fotos y quién la marcó. */
   despacho?: { salidaAt: Date; fotos: string[]; observacion?: string; despachadoPor: string };
+  /** Historial de retrasos del despacho (el último es el vigente). */
+  retrasos?: RetrasoDespacho[];
   observacion?: string;
   motivoRechazo?: string;
   estado: EstadoPedido;
@@ -70,6 +82,20 @@ const pedidoSchema = new Schema<IPedido>(
         },
         { _id: false }
       ),
+      default: undefined,
+    },
+    retrasos: {
+      type: [
+        new Schema(
+          {
+            registradoAt: { type: Date, required: true },
+            nuevaFecha: { type: String, required: true },
+            motivo: { type: String, required: true },
+            registradoPor: { type: String, required: true },
+          },
+          { _id: false }
+        ),
+      ],
       default: undefined,
     },
     observacion: { type: String },
