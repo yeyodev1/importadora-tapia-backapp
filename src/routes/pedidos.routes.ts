@@ -19,5 +19,7 @@ pedidosRouter.patch("/:id/estado", adminOnly, PedidosController.updateEstado);
 pedidosRouter.patch("/:id/fotos", sinBodega, PedidosController.updateFotos);
 // Bodega marca la salida del pedido aprobado (hora del servidor + fotos).
 pedidosRouter.patch("/:id/despacho", permitirRoles("admin", "bodega"), DespachosController.marcarSalida);
+// Bodega registra que el pedido no sale hoy: nueva fecha y motivo.
+pedidosRouter.post("/:id/retraso", permitirRoles("admin", "bodega"), DespachosController.registrarRetraso);
 
 export default pedidosRouter;
