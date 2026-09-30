@@ -18,7 +18,7 @@ export const AsignacionesInventarioController = {
   async mia(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const venCodigo = req.user?.role === "vendedor" ? req.user.venCodigo : undefined;
-      const a = venCodigo ? await asignacionDe(venCodigo) : { venCodigo: "", restringido: false, productos: [] };
+      const a = venCodigo ? await asignacionDe(venCodigo) : { venCodigo: "", restringido: false, productos: [], bodega: null };
       res.json({ success: true, data: a });
     } catch (error) {
       next(error);
@@ -28,7 +28,7 @@ export const AsignacionesInventarioController = {
   async save(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const venCodigo = String(req.params.venCodigo || "").trim();
-      const { restringido, productos } = req.body || {};
+      const { restringido, productos, bodega } = req.body || {};
       if (!venCodigo) {
         res.status(400).json({ success: false, message: "venCodigo requerido" });
         return;
@@ -42,9 +42,12 @@ export const AsignacionesInventarioController = {
         res.status(400).json({ success: false, message: "Elige al menos un producto o deja que vea todo el inventario" });
         return;
       }
+      // Bodega de la que vende (bod_nombre); si no viene, se conserva la actual.
+      const cambios: Record<string, unknown> = { venCodigo, restringido: Boolean(restringido), productos: lista, actualizadoPor: req.user!.email };
+      if (bodega !== undefined) cambios.bodega = bodega ? String(bodega).trim() : null;
       const row = await AsignacionInventarioModel.findOneAndUpdate(
         { venCodigo },
-        { venCodigo, restringido: Boolean(restringido), productos: lista, actualizadoPor: req.user!.email },
+        cambios,
         { upsert: true, new: true }
       );
       res.json({ success: true, data: publica(row) });
