@@ -11,11 +11,11 @@ export function appUrl(): string {
   return (process.env.APP_URL || "https://importadoratapia.app").replace(/\/+$/, "");
 }
 
-function esc(t: string): string {
+export function esc(t: string): string {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-function layout(title: string, body: string): string {
+export function layout(title: string, body: string): string {
   return `
 <div style="${baseStyles};max-width:520px;margin:0 auto;padding:24px">
   <div style="background:#010D27;border-radius:12px 12px 0 0;padding:18px 24px">
@@ -28,7 +28,7 @@ function layout(title: string, body: string): string {
 </div>`;
 }
 
-function boton(href: string, texto: string): string {
+export function boton(href: string, texto: string): string {
   return `<p style="margin:20px 0"><a href="${href}" style="background:#2094D2;color:#fff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:bold;display:inline-block">${texto}</a></p>`;
 }
 
