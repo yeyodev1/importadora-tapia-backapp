@@ -12,6 +12,7 @@ function publicUser(u: any) {
     role: u.role,
     venCodigo: u.venCodigo || null,
     bodega: u.bodega || null,
+    debeCambiarCorreo: Boolean(u.debeCambiarCorreo),
     createdAt: u.createdAt,
   };
 }
@@ -103,7 +104,7 @@ export const UsersController = {
 
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { email, name, password, venCodigo, bodega } = req.body || {};
+      const { email, name, password, venCodigo, bodega, debeCambiarCorreo } = req.body || {};
       const user = await UserModel.findById(req.params.id).select("+password");
       if (!user) {
         res.status(404).json({ success: false, message: "Usuario no encontrado" });
@@ -141,6 +142,9 @@ export const UsersController = {
         const b = bodegaPara(user.role, bodega ?? user.bodega);
         user.set("bodega", b);
       }
+
+      // Pedir (o cancelar el pedido) que la persona ponga su propio correo.
+      if (typeof debeCambiarCorreo === "boolean") user.debeCambiarCorreo = debeCambiarCorreo;
 
       await user.save();
       res.json({ success: true, data: publicUser(user) });
