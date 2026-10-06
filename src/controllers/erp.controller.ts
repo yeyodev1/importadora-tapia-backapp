@@ -69,6 +69,28 @@ export const ErpController = {
     }
   },
 
+  /**
+   * Nombres distintos de bodega (bod_nombre) del inventario del ERP, para
+   * asignar la bodega a un usuario de bodega o a un vendedor. Usa la caché.
+   */
+  async bodegas(_req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const r = await cachedRead("inventario", () => ErpService.getInventario() as any);
+      const nombres = new Set<string>();
+      for (const row of r.data as Array<{ bod_nombre?: string }>) {
+        const b = String(row.bod_nombre || "").trim();
+        if (b) nombres.add(b);
+      }
+      res.json({
+        success: true,
+        data: [...nombres].sort((a, b) => a.localeCompare(b, "es")),
+        meta: { stale: r.stale, updatedAt: r.updatedAt, source: r.stale ? "cache" : "erp", error: r.error },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
   async carteraFacturas(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const s = scope(req);
