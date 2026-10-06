@@ -9,6 +9,11 @@ export interface IUser extends Document {
   role: UserRole;
   /** Código del vendedor en el ERP (vw_crm_vendedores); requerido si role = vendedor. */
   venCodigo?: string;
+  /**
+   * Bodega (bod_nombre del ERP) que atiende un usuario de rol "bodega"; solo
+   * ve los pedidos con productos de esa bodega. Vacío = ve todas las bodegas.
+   */
+  bodega?: string;
   comparePassword(candidate: string): Promise<boolean>;
 }
 
@@ -25,6 +30,7 @@ const userSchema = new Schema<IUser>(
     name: { type: String, required: true, trim: true },
     role: { type: String, enum: ["admin", "vendedor", "bodega"], default: "vendedor" },
     venCodigo: { type: String },
+    bodega: { type: String, trim: true },
   },
   { timestamps: true }
 );
