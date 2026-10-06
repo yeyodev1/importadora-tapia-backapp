@@ -1,6 +1,12 @@
 import mongoose, { Schema, Document } from "mongoose";
 
-export type EstadoPedido = "enviado" | "aprobado" | "rechazado";
+/**
+ * "en_espera": administración aún no aprueba y deja un mensaje al asesor
+ * (p.ej. que respalde facturas pendientes). Luego lo aprueba o rechaza.
+ */
+export type EstadoPedido = "enviado" | "aprobado" | "rechazado" | "en_espera";
+
+export const ESTADOS_PEDIDO: EstadoPedido[] = ["enviado", "aprobado", "rechazado", "en_espera"];
 
 export interface PedidoItem {
   productoCodigo: string;
@@ -20,6 +26,14 @@ export interface RetrasoDespacho {
   nuevaFecha: string;
   motivo: string;
   registradoPor: string;
+}
+
+/** Cada cambio de estado hecho por administración, con su nota y quién lo hizo. */
+export interface CambioEstado {
+  estado: EstadoPedido;
+  nota?: string;
+  por: string;
+  at: Date;
 }
 
 export interface IPedido extends Document {
@@ -42,6 +56,11 @@ export interface IPedido extends Document {
   retrasos?: RetrasoDespacho[];
   observacion?: string;
   motivoRechazo?: string;
+  /** Comentario de administración al aprobar (p.ej. "Transferencia OK"). */
+  comentarioAprobacion?: string;
+  /** Mensaje al asesor mientras el pedido está en espera. */
+  motivoEspera?: string;
+  historialEstado?: CambioEstado[];
   estado: EstadoPedido;
   createdAt: Date;
 }
@@ -100,11 +119,27 @@ const pedidoSchema = new Schema<IPedido>(
     },
     observacion: { type: String },
     motivoRechazo: { type: String },
-    // El vendedor SIEMPRE puede enviar; administración aprueba o rechaza.
+    comentarioAprobacion: { type: String },
+    motivoEspera: { type: String },
+    historialEstado: {
+      type: [
+        new Schema(
+          {
+            estado: { type: String, enum: ESTADOS_PEDIDO, required: true },
+            nota: { type: String },
+            por: { type: String, required: true },
+            at: { type: Date, required: true },
+          },
+          { _id: false }
+        ),
+      ],
+      default: undefined,
+    },
+    // El vendedor SIEMPRE puede enviar; administración aprueba, rechaza o lo deja en espera.
     // No emite factura: es una orden que Tapia procesa en su ERP.
     estado: {
       type: String,
-      enum: ["enviado", "aprobado", "rechazado"],
+      enum: ESTADOS_PEDIDO,
       default: "enviado",
     },
   },
