@@ -3,6 +3,7 @@ import { ErpController } from "../controllers/erp.controller";
 import { CarteraCompartirController } from "../controllers/carteraCompartir.controller";
 import { FacturaAdjuntosController } from "../controllers/facturaAdjuntos.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
+import { adminOnly } from "../middlewares/adminOnly.middleware";
 import { AuthRequest } from "../types/AuthRequest";
 
 const erpRouter = Router();
@@ -33,6 +34,8 @@ erpRouter.use((req: AuthRequest, res: Response, next: NextFunction) => {
 erpRouter.get("/clientes", ErpController.clientes);
 erpRouter.get("/vendedores", ErpController.vendedores);
 erpRouter.get("/inventario", ErpController.inventario);
+// Nombres de bodega del ERP (para asignar la bodega de un usuario).
+erpRouter.get("/bodegas", adminOnly, ErpController.bodegas);
 erpRouter.get("/cartera/facturas", ErpController.carteraFacturas);
 erpRouter.get("/cartera/consolidada", ErpController.carteraConsolidada);
 // Enviar el saldo de una factura por correo (desde app@importadoratapia.app).
