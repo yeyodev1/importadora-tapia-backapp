@@ -14,13 +14,14 @@ function key(codigo: string, bodega?: string): string {
 }
 
 /**
- * Suma las cantidades ya comprometidas en pedidos ACTIVOS (enviado o aprobado).
+ * Suma las cantidades ya comprometidas en pedidos ACTIVOS (enviado, en espera
+ * o aprobado). En espera sigue pendiente igual que enviado: conserva su reserva.
  * Los rechazados NO reservan: liberan el stock automáticamente.
  * Devuelve un mapa "codigo|bodega" -> cantidad reservada.
  */
 export async function reservasActivas(): Promise<Record<string, number>> {
   const activos = await PedidoModel.find({
-    estado: { $in: ["enviado", "aprobado"] },
+    estado: { $in: ["enviado", "en_espera", "aprobado"] },
   }).select("items");
 
   const map: Record<string, number> = {};
