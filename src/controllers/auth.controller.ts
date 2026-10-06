@@ -26,6 +26,7 @@ export const AuthController = {
         email: user.email,
         role: user.role,
         ...(user.venCodigo ? { venCodigo: user.venCodigo } : {}),
+        ...(user.role === "bodega" && user.bodega ? { bodega: user.bodega } : {}),
       };
 
       const token = jwt.sign(payload, process.env.JWT_SECRET as string, {
@@ -41,6 +42,7 @@ export const AuthController = {
           name: user.name,
           role: user.role,
           venCodigo: user.venCodigo || null,
+          bodega: user.bodega || null,
         },
       });
     } catch (error) {
@@ -64,6 +66,7 @@ export const AuthController = {
           name: user.name,
           role: user.role,
           venCodigo: user.venCodigo || null,
+          bodega: user.bodega || null,
         },
       });
     } catch (error) {
