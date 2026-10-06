@@ -14,6 +14,12 @@ export interface IUser extends Document {
    * ve los pedidos con productos de esa bodega. Vacío = ve todas las bodegas.
    */
   bodega?: string;
+  /** Hash sha256 del token de "recuperar contraseña" (el token en claro solo viaja en el correo). */
+  resetTokenHash?: string;
+  /** Hasta cuándo sirve el token de recuperación (30 min desde que se pidió). */
+  resetTokenExpira?: Date;
+  /** Última vez que el usuario restableció su contraseña. */
+  passwordCambiadaAt?: Date;
   comparePassword(candidate: string): Promise<boolean>;
 }
 
@@ -31,6 +37,9 @@ const userSchema = new Schema<IUser>(
     role: { type: String, enum: ["admin", "vendedor", "bodega"], default: "vendedor" },
     venCodigo: { type: String },
     bodega: { type: String, trim: true },
+    resetTokenHash: { type: String, select: false, index: true, sparse: true },
+    resetTokenExpira: { type: Date, select: false },
+    passwordCambiadaAt: { type: Date },
   },
   { timestamps: true }
 );
