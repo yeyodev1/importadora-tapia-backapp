@@ -121,20 +121,20 @@ export function pedidoEstadoEmail(p: {
   const aprobado = p.estado === "aprobado";
   const espera = p.estado === "en_espera";
   const color = aprobado ? "#17916C" : espera ? "#C27C0E" : "#E5484D";
-  const texto = aprobado ? "APROBADO" : espera ? "EN ESPERA" : "RECHAZADO";
+  const texto = aprobado ? "APROBADO" : espera ? "EN ESPERA" : "NO APROBADO";
   const fondo = aprobado ? "#e8f6f0" : espera ? "#fdf4e3" : "#fdecee";
   const nota = espera ? p.comentario : aprobado ? p.comentario : p.motivoRechazo || p.comentario;
   const etiqueta = espera ? "Mensaje de administración" : aprobado ? "Comentario" : "Motivo";
   const cuerpoEspera = `<p>Tu pedido <b>${p.numero}</b> para <b>${esc(p.clienteNombre)}</b> (${money(p.total)}) está
        <b style="color:${color}">en espera</b>: administración aún no lo aprueba.</p>`;
-  const cuerpoFinal = `<p>Tu pedido <b>${p.numero}</b> para <b>${esc(p.clienteNombre)}</b> (${money(p.total)}) fue
-       <b style="color:${color}">${texto.toLowerCase()}</b> por administración.</p>`;
+  const cuerpoFinal = `<p>Tu pedido <b>${p.numero}</b> para <b>${esc(p.clienteNombre)}</b> (${money(p.total)}) ${aprobado ? "fue" : "<b>no</b> fue"}
+       <b style="color:${color}">aprobado</b> por administración.</p>`;
   return {
-    subject: espera ? `Tu pedido ${p.numero} está en espera` : `Tu pedido ${p.numero} fue ${texto.toLowerCase()}`,
+    subject: espera ? `Tu pedido ${p.numero} está en espera` : aprobado ? `Tu pedido ${p.numero} fue aprobado` : `Tu pedido ${p.numero} no fue aprobado`,
     html: shell(
       espera
         ? `Tu pedido está <span style="color:${color}">EN ESPERA</span>`
-        : `Tu pedido fue <span style="color:${color}">${texto}</span>`,
+        : aprobado ? `Tu pedido fue <span style="color:${color}">APROBADO</span>` : `Tu pedido <span style="color:${color}">NO FUE APROBADO</span>`,
       `${espera ? cuerpoEspera : cuerpoFinal}
        ${nota ? `<p style="background:${fondo};border-radius:8px;padding:10px 14px;color:${color}">${etiqueta}: ${esc(nota)}</p>` : ""}
        ${aprobado ? `<p>Ya puedes coordinar la entrega con el cliente.</p>` : ""}
