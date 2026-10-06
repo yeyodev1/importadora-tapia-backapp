@@ -20,6 +20,11 @@ export interface IUser extends Document {
   resetTokenExpira?: Date;
   /** Última vez que el usuario restableció su contraseña. */
   passwordCambiadaAt?: Date;
+  /**
+   * El admin pidió que la persona ponga su propio correo (p. ej. entra con uno
+   * genérico de bodega). Mientras sea true la app la obliga a cambiarlo.
+   */
+  debeCambiarCorreo?: boolean;
   comparePassword(candidate: string): Promise<boolean>;
 }
 
@@ -40,6 +45,7 @@ const userSchema = new Schema<IUser>(
     resetTokenHash: { type: String, select: false, index: true, sparse: true },
     resetTokenExpira: { type: Date, select: false },
     passwordCambiadaAt: { type: Date },
+    debeCambiarCorreo: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
