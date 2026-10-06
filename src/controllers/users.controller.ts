@@ -11,8 +11,19 @@ function publicUser(u: any) {
     name: u.name,
     role: u.role,
     venCodigo: u.venCodigo || null,
+    bodega: u.bodega || null,
     createdAt: u.createdAt,
   };
+}
+
+/**
+ * Bodega (bod_nombre) que atiende un usuario de bodega. Solo aplica al rol
+ * "bodega"; vacío = ve todas las bodegas.
+ */
+function bodegaPara(role: string, bodega: unknown): string | undefined {
+  if (role !== "bodega") return undefined;
+  const b = String(bodega ?? "").trim();
+  return b || undefined;
 }
 
 /** Valida que el código exista en el ERP y devuelve el nombre del vendedor. */
@@ -33,7 +44,7 @@ export const UsersController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { email, password, role, venCodigo, name } = req.body || {};
+      const { email, password, role, venCodigo, name, bodega } = req.body || {};
       if (!email || !password || !role) {
         res.status(400).json({ success: false, message: "email, password y role son requeridos" });
         return;
@@ -77,6 +88,7 @@ export const UsersController = {
         name: finalName,
         role,
         venCodigo: finalVenCodigo,
+        bodega: bodegaPara(role, bodega),
       });
 
       // Correo de bienvenida con credenciales; si falla no bloquea la creación.
@@ -91,7 +103,7 @@ export const UsersController = {
 
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { email, name, password, venCodigo } = req.body || {};
+      const { email, name, password, venCodigo, bodega } = req.body || {};
       const user = await UserModel.findById(req.params.id).select("+password");
       if (!user) {
         res.status(404).json({ success: false, message: "Usuario no encontrado" });
@@ -123,6 +135,11 @@ export const UsersController = {
           return;
         }
         user.venCodigo = String(venCodigo);
+      }
+      // Bodega que atiende (solo rol bodega); a los demás roles se les limpia.
+      if (bodega !== undefined || user.role !== "bodega") {
+        const b = bodegaPara(user.role, bodega ?? user.bodega);
+        user.set("bodega", b);
       }
 
       await user.save();
