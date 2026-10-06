@@ -1,10 +1,11 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import { UserModel } from "../models/user.model";
+import { UserModel, IUser } from "../models/user.model";
 import { JwtPayload, AuthRequest } from "../types/AuthRequest";
 import { sendMail } from "../services/email.service";
 import { recuperarContrasenaEmail, contrasenaCambiadaEmail } from "../services/passwordReset.email";
+import { correoNuevoEmail, correoAnteriorEmail } from "../services/cambioCorreo.email";
 
 /** Vigencia del enlace de recuperación. */
 const RESET_TTL_MS = 30 * 60 * 1000;
@@ -22,6 +23,33 @@ export function validarContrasena(pw: string): string | null {
   if (pw.length > 72) return "La contraseña no puede tener más de 72 caracteres";
   if (!/[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/.test(pw) || !/\d/.test(pw)) return "La contraseña debe tener al menos una letra y un número";
   return null;
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** JWT de sesión (8 h). El payload lleva el email, por eso se re-firma al cambiarlo. */
+function firmarToken(user: IUser): string {
+  const payload: JwtPayload = {
+    id: String(user._id),
+    email: user.email,
+    role: user.role,
+    ...(user.venCodigo ? { venCodigo: user.venCodigo } : {}),
+    ...(user.role === "bodega" && user.bodega ? { bodega: user.bodega } : {}),
+  };
+  return jwt.sign(payload, process.env.JWT_SECRET as string, { expiresIn: "8h" });
+}
+
+/** Datos del usuario que ve el front (login, /auth/me y cambio de correo). */
+function usuarioPublico(user: IUser) {
+  return {
+    id: String(user._id),
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    venCodigo: user.venCodigo || null,
+    bodega: user.bodega || null,
+    debeCambiarCorreo: Boolean(user.debeCambiarCorreo),
+  };
 }
 
 export const AuthController = {
@@ -42,30 +70,7 @@ export const AuthController = {
         return;
       }
 
-      const payload: JwtPayload = {
-        id: String(user._id),
-        email: user.email,
-        role: user.role,
-        ...(user.venCodigo ? { venCodigo: user.venCodigo } : {}),
-        ...(user.role === "bodega" && user.bodega ? { bodega: user.bodega } : {}),
-      };
-
-      const token = jwt.sign(payload, process.env.JWT_SECRET as string, {
-        expiresIn: "8h",
-      });
-
-      res.json({
-        success: true,
-        token,
-        user: {
-          id: String(user._id),
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          venCodigo: user.venCodigo || null,
-          bodega: user.bodega || null,
-        },
-      });
+      res.json({ success: true, token: firmarToken(user), user: usuarioPublico(user) });
     } catch (error) {
       next(error);
     }
@@ -79,17 +84,7 @@ export const AuthController = {
         res.status(404).json({ success: false, message: "Usuario no encontrado" });
         return;
       }
-      res.json({
-        success: true,
-        user: {
-          id: String(user._id),
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          venCodigo: user.venCodigo || null,
-          bodega: user.bodega || null,
-        },
-      });
+      res.json({ success: true, user: usuarioPublico(user) });
     } catch (error) {
       next(error);
     }
@@ -160,6 +155,76 @@ export const AuthController = {
       sendMail({ to: user.email, ...mail }).catch(() => undefined);
 
       res.json({ success: true, message: "Tu contraseña fue actualizada. Ya puedes iniciar sesión." });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * El usuario cambia su propio correo de acceso. Exige la contraseña actual,
+   * apaga el pedido del admin (debeCambiarCorreo) y devuelve un token nuevo
+   * porque el anterior lleva el correo viejo. Avisa a ambos correos.
+   */
+  async cambiarCorreo(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const nuevo = String(req.body?.nuevoEmail || "").trim().toLowerCase();
+      const password = String(req.body?.password || "");
+
+      if (!nuevo || !password) {
+        res.status(400).json({ success: false, message: "Escribe tu nuevo correo y tu contraseña actual" });
+        return;
+      }
+      if (nuevo.length > 254 || !EMAIL_RE.test(nuevo)) {
+        res.status(400).json({ success: false, message: "El correo no es válido" });
+        return;
+      }
+
+      const user = await UserModel.findById(req.user?.id).select("+password");
+      if (!user) {
+        res.status(404).json({ success: false, message: "Usuario no encontrado" });
+        return;
+      }
+      // 400 y no 401: el front cierra la sesión ante cualquier 401.
+      if (!(await user.comparePassword(password))) {
+        res.status(400).json({ success: false, message: "La contraseña actual no es correcta" });
+        return;
+      }
+      if (nuevo === user.email) {
+        res.status(400).json({ success: false, message: "Ese ya es tu correo actual. Escribe uno distinto." });
+        return;
+      }
+      const ocupado = await UserModel.exists({ email: nuevo, _id: { $ne: user._id } });
+      if (ocupado) {
+        res.status(409).json({ success: false, message: "Ese correo ya lo usa otra cuenta del CRM" });
+        return;
+      }
+
+      const anterior = user.email;
+      user.email = nuevo;
+      user.debeCambiarCorreo = false;
+      try {
+        await user.save();
+      } catch (err: any) {
+        // Carrera con otro registro que tomó el mismo correo (índice único).
+        if (err?.code === 11000) {
+          res.status(409).json({ success: false, message: "Ese correo ya lo usa otra cuenta del CRM" });
+          return;
+        }
+        throw err;
+      }
+
+      // Correos sin bloquear la respuesta.
+      sendMail({ to: nuevo, ...correoNuevoEmail({ name: user.name, nuevo }) }).catch(() => undefined);
+      sendMail({ to: anterior, ...correoAnteriorEmail({ name: user.name, nuevo, fecha: new Date() }) }).catch(
+        () => undefined
+      );
+
+      res.json({
+        success: true,
+        message: `Desde ahora entra con ${nuevo}`,
+        token: firmarToken(user),
+        user: usuarioPublico(user),
+      });
     } catch (error) {
       next(error);
     }
