@@ -3,12 +3,13 @@ import mongoose from "mongoose";
 import { PedidoModel, PedidoItem } from "../models/pedido.model";
 import { UserModel } from "../models/user.model";
 import { nextSeq, formatDoc } from "../models/counter.model";
-import { sendMail, pedidoNuevoEmail, pedidoEstadoEmail } from "../services/email.service";
+import { sendMail, pedidoNuevoEmail } from "../services/email.service";
 import { validarDisponibilidad } from "../services/stock.service";
 import { uploadComprobante, esUrlCloudinaryPropia, firmaSubidaDirecta } from "../services/cloudinary.service";
 import { AuthRequest } from "../types/AuthRequest";
 import { validarSoloContado } from "../services/reglasProducto.service";
 import { validarBodegaVendedor } from "../services/asignacionInventario.service";
+import { bodegaDeUsuario, filtroPorBodega } from "../services/bodegaUsuario.service";
 
 /** Correos de todos los administradores (para avisos de aprobación). */
 async function adminEmails(): Promise<string[]> {
@@ -19,8 +20,12 @@ async function adminEmails(): Promise<string[]> {
 export const PedidosController = {
   async list(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      // Vendedor: solo los suyos. Bodega con bodega asignada (p.ej. Quito):
+      // solo los pedidos con productos de su bodega.
       const filtro =
-        req.user?.role === "vendedor" ? { vendedorId: req.user.id } : {};
+        req.user?.role === "vendedor"
+          ? { vendedorId: req.user.id }
+          : filtroPorBodega(await bodegaDeUsuario(req.user));
       const pedidos = await PedidoModel.find(filtro).sort({ createdAt: -1 }).limit(200);
       res.json({ success: true, data: pedidos });
     } catch (error) {
@@ -190,54 +195,6 @@ export const PedidosController = {
         return;
       }
       res.json({ success: true, data: firma });
-    } catch (error) {
-      next(error);
-    }
-  },
-
-  /** Admin aprueba o rechaza el pedido (con motivo opcional). */
-  async updateEstado(req: AuthRequest, res: Response, next: NextFunction) {
-    try {
-      const { estado, motivoRechazo } = req.body || {};
-      if (!["aprobado", "rechazado", "enviado"].includes(estado)) {
-        res.status(400).json({ success: false, message: "Estado inválido" });
-        return;
-      }
-      // Un pedido que ya salió de bodega no cambia de estado.
-      const actual = mongoose.isValidObjectId(String(req.params.id))
-        ? await PedidoModel.findById(req.params.id).select("despacho")
-        : null;
-      if (actual?.despacho?.salidaAt) {
-        res.status(409).json({ success: false, message: "El pedido ya salió de bodega: no se puede cambiar su estado" });
-        return;
-      }
-      const pedido = await PedidoModel.findByIdAndUpdate(
-        req.params.id,
-        { estado, ...(motivoRechazo ? { motivoRechazo } : {}) },
-        { new: true }
-      );
-      if (!pedido) {
-        res.status(404).json({ success: false, message: "Pedido no encontrado" });
-        return;
-      }
-      res.json({ success: true, data: pedido });
-
-      // Aviso al vendedor con el resultado (no bloquea la respuesta).
-      if (estado === "aprobado" || estado === "rechazado") {
-        UserModel.findById(pedido.vendedorId)
-          .then((u) => {
-            if (!u) return;
-            const mail = pedidoEstadoEmail({
-              numero: pedido.numero,
-              clienteNombre: pedido.clienteNombre,
-              total: pedido.total,
-              estado,
-              motivoRechazo: pedido.motivoRechazo,
-            });
-            return sendMail({ to: u.email, ...mail });
-          })
-          .catch(() => {});
-      }
     } catch (error) {
       next(error);
     }
