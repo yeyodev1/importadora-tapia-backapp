@@ -103,25 +103,42 @@ export function pedidoNuevoEmail(p: {
   };
 }
 
-/** Aviso al vendedor: su pedido fue aprobado o rechazado. */
+/** Escapa el texto libre que escribe administración antes de meterlo al HTML. */
+function esc(t: string): string {
+  return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+/** Aviso al vendedor: su pedido fue aprobado, rechazado o quedó en espera. */
 export function pedidoEstadoEmail(p: {
   numero: string;
   clienteNombre: string;
   total: number;
   estado: string;
   motivoRechazo?: string;
+  /** Comentario o mensaje de administración (aprobación o espera). */
+  comentario?: string;
 }): { subject: string; html: string } {
   const aprobado = p.estado === "aprobado";
-  const color = aprobado ? "#17916C" : "#E5484D";
-  const texto = aprobado ? "APROBADO" : "RECHAZADO";
+  const espera = p.estado === "en_espera";
+  const color = aprobado ? "#17916C" : espera ? "#C27C0E" : "#E5484D";
+  const texto = aprobado ? "APROBADO" : espera ? "EN ESPERA" : "RECHAZADO";
+  const fondo = aprobado ? "#e8f6f0" : espera ? "#fdf4e3" : "#fdecee";
+  const nota = espera ? p.comentario : aprobado ? p.comentario : p.motivoRechazo || p.comentario;
+  const etiqueta = espera ? "Mensaje de administración" : aprobado ? "Comentario" : "Motivo";
+  const cuerpoEspera = `<p>Tu pedido <b>${p.numero}</b> para <b>${esc(p.clienteNombre)}</b> (${money(p.total)}) está
+       <b style="color:${color}">en espera</b>: administración aún no lo aprueba.</p>`;
+  const cuerpoFinal = `<p>Tu pedido <b>${p.numero}</b> para <b>${esc(p.clienteNombre)}</b> (${money(p.total)}) fue
+       <b style="color:${color}">${texto.toLowerCase()}</b> por administración.</p>`;
   return {
-    subject: `Tu pedido ${p.numero} fue ${texto.toLowerCase()}`,
+    subject: espera ? `Tu pedido ${p.numero} está en espera` : `Tu pedido ${p.numero} fue ${texto.toLowerCase()}`,
     html: shell(
-      `Tu pedido fue <span style="color:${color}">${texto}</span>`,
-      `<p>Tu pedido <b>${p.numero}</b> para <b>${p.clienteNombre}</b> (${money(p.total)}) fue
-       <b style="color:${color}">${texto.toLowerCase()}</b> por administración.</p>
-       ${p.motivoRechazo ? `<p style="background:#fdecee;border-radius:8px;padding:10px 14px;color:#b4232a">Motivo: ${p.motivoRechazo}</p>` : ""}
-       ${aprobado ? `<p>Ya puedes coordinar la entrega con el cliente.</p>` : ""}`
+      espera
+        ? `Tu pedido está <span style="color:${color}">EN ESPERA</span>`
+        : `Tu pedido fue <span style="color:${color}">${texto}</span>`,
+      `${espera ? cuerpoEspera : cuerpoFinal}
+       ${nota ? `<p style="background:${fondo};border-radius:8px;padding:10px 14px;color:${color}">${etiqueta}: ${esc(nota)}</p>` : ""}
+       ${aprobado ? `<p>Ya puedes coordinar la entrega con el cliente.</p>` : ""}
+       ${espera ? `<p>Atiende el mensaje para que administración pueda aprobar el pedido.</p>` : ""}`
     ),
   };
 }
