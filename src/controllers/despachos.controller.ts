@@ -3,6 +3,21 @@ import mongoose from "mongoose";
 import { PedidoModel } from "../models/pedido.model";
 import { AuthRequest } from "../types/AuthRequest";
 import { esUrlCloudinaryPropia } from "../services/cloudinary.service";
+import { bodegaDeUsuario, pedidoEsDeBodega } from "../services/bodegaUsuario.service";
+
+/** Por qué un pedido no aprobado no se despacha (mensaje para bodega). */
+function motivoNoDespacha(estado: string): string {
+  if (estado === "en_espera") return "Este pedido está en espera por administración: aún no se despacha.";
+  if (estado === "enviado") return "Este pedido aún no está aprobado por administración: no se puede despachar.";
+  return "Este pedido fue rechazado: no se despacha.";
+}
+
+/** Bodega con bodega asignada (p.ej. Quito) solo despacha pedidos de su bodega. */
+async function esOtraBodega(req: AuthRequest, items: { bodega?: string }[]): Promise<boolean> {
+  return !pedidoEsDeBodega(items, await bodegaDeUsuario(req.user));
+}
+
+const MSG_OTRA_BODEGA = "Este pedido es de otra bodega: no lo puedes gestionar.";
 
 /** Fecha de hoy en Ecuador como "YYYY-MM-DD". */
 function hoyEcuador(): string {
@@ -38,8 +53,15 @@ export const DespachosController = {
         res.status(404).json({ success: false, message: "Pedido no encontrado" });
         return;
       }
+      if (await esOtraBodega(req, pedido.items)) {
+        res.status(403).json({ success: false, message: MSG_OTRA_BODEGA });
+        return;
+      }
       if (pedido.estado !== "aprobado") {
-        res.status(409).json({ success: false, message: "Solo se registra retraso de pedidos aprobados" });
+        res.status(409).json({
+          success: false,
+          message: pedido.estado === "en_espera" ? motivoNoDespacha("en_espera") : "Solo se registra retraso de pedidos aprobados",
+        });
         return;
       }
       if (pedido.despacho?.salidaAt) {
@@ -81,14 +103,12 @@ export const DespachosController = {
         res.status(404).json({ success: false, message: "Pedido no encontrado" });
         return;
       }
+      if (await esOtraBodega(req, pedido.items)) {
+        res.status(403).json({ success: false, message: MSG_OTRA_BODEGA });
+        return;
+      }
       if (pedido.estado !== "aprobado") {
-        res.status(409).json({
-          success: false,
-          message:
-            pedido.estado === "enviado"
-              ? "Este pedido aún no está aprobado por administración: no se puede despachar."
-              : "Este pedido fue rechazado: no se despacha.",
-        });
+        res.status(409).json({ success: false, message: motivoNoDespacha(pedido.estado) });
         return;
       }
 
