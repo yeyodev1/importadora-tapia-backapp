@@ -3,10 +3,28 @@ import mongoose, { Schema, Document } from "mongoose";
 /**
  * "en_espera": administración aún no aprueba y deja un mensaje al asesor
  * (p.ej. que respalde facturas pendientes). Luego lo aprueba o rechaza.
+ * "anulado": el pedido se cae después de enviado o aprobado (el cliente ya no
+ * lo quiere, se pasó del cupo...). Libera el stock y no se despacha.
  */
-export type EstadoPedido = "enviado" | "aprobado" | "rechazado" | "en_espera";
+export type EstadoPedido = "enviado" | "aprobado" | "rechazado" | "en_espera" | "anulado";
 
-export const ESTADOS_PEDIDO: EstadoPedido[] = ["enviado", "aprobado", "rechazado", "en_espera"];
+export const ESTADOS_PEDIDO: EstadoPedido[] = ["enviado", "aprobado", "rechazado", "en_espera", "anulado"];
+
+/** Quién anuló el pedido, por qué y cuándo. */
+export interface Anulacion {
+  motivo: string;
+  por: string;
+  rol: string;
+  at: Date;
+}
+
+/** Administración bajó cantidades (o quitó líneas) de un pedido ya enviado. */
+export interface AjustePedido {
+  at: Date;
+  por: string;
+  nota?: string;
+  cambios: { productoNombre: string; antes: number; despues: number }[];
+}
 
 export interface PedidoItem {
   productoCodigo: string;
@@ -61,6 +79,8 @@ export interface IPedido extends Document {
   /** Mensaje al asesor mientras el pedido está en espera. */
   motivoEspera?: string;
   historialEstado?: CambioEstado[];
+  anulacion?: Anulacion;
+  ajustes?: AjustePedido[];
   estado: EstadoPedido;
   createdAt: Date;
 }
@@ -129,6 +149,44 @@ const pedidoSchema = new Schema<IPedido>(
             nota: { type: String },
             por: { type: String, required: true },
             at: { type: Date, required: true },
+          },
+          { _id: false }
+        ),
+      ],
+      default: undefined,
+    },
+    anulacion: {
+      type: new Schema(
+        {
+          motivo: { type: String, required: true },
+          por: { type: String, required: true },
+          rol: { type: String, required: true },
+          at: { type: Date, required: true },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
+    ajustes: {
+      type: [
+        new Schema(
+          {
+            at: { type: Date, required: true },
+            por: { type: String, required: true },
+            nota: { type: String },
+            cambios: {
+              type: [
+                new Schema(
+                  {
+                    productoNombre: { type: String, required: true },
+                    antes: { type: Number, required: true },
+                    despues: { type: Number, required: true },
+                  },
+                  { _id: false }
+                ),
+              ],
+              default: [],
+            },
           },
           { _id: false }
         ),
