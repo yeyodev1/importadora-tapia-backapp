@@ -18,6 +18,25 @@ export interface Anulacion {
   at: Date;
 }
 
+/** Una salida de bodega (parcial o la última). Las cantidades van por producto y bodega. */
+export interface EntregaPedido {
+  at: Date;
+  por: string;
+  cantidades: { productoCodigo: string; bodega?: string; cantidad: number }[];
+  fotos: string[];
+  observacion?: string;
+}
+
+/** Clave de una línea del pedido para cruzar entregas (las líneas pueden cambiar al ajustar). */
+export const claveLinea = (it: { productoCodigo: string; bodega?: string }) => `${it.productoCodigo}|${it.bodega || ""}`;
+
+/** Cuánto ya salió de cada línea, por clave. */
+export function entregadoPorLinea(entregas?: EntregaPedido[]): Record<string, number> {
+  const m: Record<string, number> = {};
+  for (const e of entregas || []) for (const c of e.cantidades) m[claveLinea(c)] = (m[claveLinea(c)] || 0) + c.cantidad;
+  return m;
+}
+
 /** Administración bajó cantidades (o quitó líneas) de un pedido ya enviado. */
 export interface AjustePedido {
   at: Date;
@@ -70,6 +89,8 @@ export interface IPedido extends Document {
   fotos?: string[];
   /** Salida de bodega: hora del servidor, fotos y quién la marcó. */
   despacho?: { salidaAt: Date; fotos: string[]; observacion?: string; despachadoPor: string };
+  /** Salidas de bodega cuando el cliente recibe por partes (la que completa el pedido llena `despacho`). */
+  entregas?: EntregaPedido[];
   /** Historial de retrasos del despacho (el último es el vigente). */
   retrasos?: RetrasoDespacho[];
   observacion?: string;
@@ -121,6 +142,33 @@ const pedidoSchema = new Schema<IPedido>(
         },
         { _id: false }
       ),
+      default: undefined,
+    },
+    entregas: {
+      type: [
+        new Schema(
+          {
+            at: { type: Date, required: true },
+            por: { type: String, required: true },
+            cantidades: {
+              type: [
+                new Schema(
+                  {
+                    productoCodigo: { type: String, required: true },
+                    bodega: { type: String },
+                    cantidad: { type: Number, required: true, min: 0 },
+                  },
+                  { _id: false }
+                ),
+              ],
+              default: [],
+            },
+            fotos: { type: [String], default: [] },
+            observacion: { type: String },
+          },
+          { _id: false }
+        ),
+      ],
       default: undefined,
     },
     retrasos: {
