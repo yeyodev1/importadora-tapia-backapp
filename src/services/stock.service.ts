@@ -14,14 +14,16 @@ function key(codigo: string, bodega?: string): string {
 }
 
 /**
- * Suma las cantidades ya comprometidas en pedidos ACTIVOS (enviado, en espera
- * o aprobado). En espera sigue pendiente igual que enviado: conserva su reserva.
- * Los rechazados NO reservan: liberan el stock automáticamente.
+ * Suma las cantidades comprometidas en pedidos PENDIENTES de aprobación
+ * (enviado o en espera). Al aprobarse, Tapia registra el pedido en su ERP y
+ * stock_actual ya lo descuenta: si siguiera reservando se restaría dos veces
+ * (pasó con la lenteja: el disponible quedaba en 0 con stock en bodega).
+ * Rechazados y anulados no reservan.
  * Devuelve un mapa "codigo|bodega" -> cantidad reservada.
  */
 export async function reservasActivas(): Promise<Record<string, number>> {
   const activos = await PedidoModel.find({
-    estado: { $in: ["enviado", "en_espera", "aprobado"] },
+    estado: { $in: ["enviado", "en_espera"] },
   }).select("items");
 
   const map: Record<string, number> = {};
