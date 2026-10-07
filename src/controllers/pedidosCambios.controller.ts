@@ -4,6 +4,8 @@ import { PedidoModel } from "../models/pedido.model";
 import { UserModel } from "../models/user.model";
 import { sendMail, pedidoAnuladoEmail, pedidoAjustadoEmail } from "../services/email.service";
 import { AuthRequest } from "../types/AuthRequest";
+import { validarDisponibilidad } from "../services/stock.service";
+import { validarCupos } from "../services/cupos.service";
 
 /** Nombre de quien hace el cambio para el historial (si no se encuentra, su correo). */
 async function nombreUsuario(req: AuthRequest): Promise<string> {
@@ -71,9 +73,10 @@ export const PedidosCambiosController = {
   },
 
   /**
-   * Administración baja cantidades o quita líneas de un pedido que aún no sale
-   * (p.ej. el cliente pidió 100 y solo le tocan 97). Solo reduce: lo que se
-   * quita vuelve al stock disponible, así no hay que revalidar inventario.
+   * Administración cambia cantidades o quita líneas de un pedido que aún no
+   * sale (p.ej. el cliente pidió 100 y solo le tocan 97, o ahora quiere más).
+   * Lo que se baja vuelve al stock; lo que se sube se valida contra el stock
+   * disponible y el cupo del asesor (solo la diferencia).
    * body: { cantidades: number[] (una por línea, en el mismo orden), nota? }
    */
   async ajustar(req: AuthRequest, res: Response, next: NextFunction) {
@@ -101,6 +104,7 @@ export const PedidosCambiosController = {
 
       const cambios: { productoNombre: string; antes: number; despues: number }[] = [];
       const items = [];
+      const aumentos: { productoCodigo: string; productoNombre: string; bodega?: string; cantidad: number }[] = [];
       for (let i = 0; i < pedido.items.length; i++) {
         const it = pedido.items[i]!;
         const nueva = Number(cantidades[i]);
@@ -109,11 +113,7 @@ export const PedidosCambiosController = {
           return;
         }
         if (nueva > it.cantidad) {
-          res.status(400).json({
-            success: false,
-            message: `${it.productoNombre}: solo se puede bajar la cantidad (tenía ${it.cantidad}). Para subirla, el asesor envía otro pedido.`,
-          });
-          return;
+          aumentos.push({ productoCodigo: it.productoCodigo, productoNombre: it.productoNombre, bodega: it.bodega, cantidad: nueva - it.cantidad });
         }
         if (nueva !== it.cantidad) cambios.push({ productoNombre: it.productoNombre, antes: it.cantidad, despues: nueva });
         if (nueva > 0) {
@@ -135,6 +135,20 @@ export const PedidosCambiosController = {
       if (!items.length) {
         res.status(400).json({ success: false, message: "El pedido quedaría vacío: mejor anúlalo" });
         return;
+      }
+
+      // Lo que se sube debe caber en el stock disponible y en el cupo del asesor.
+      if (aumentos.length) {
+        const errorCupo = await validarCupos(aumentos, pedido.venCodigo);
+        if (errorCupo) {
+          res.status(409).json({ success: false, message: errorCupo });
+          return;
+        }
+        const errorStock = await validarDisponibilidad(aumentos);
+        if (errorStock) {
+          res.status(409).json({ success: false, message: `Sin stock para subir la cantidad. ${errorStock}` });
+          return;
+        }
       }
 
       const por = await nombreUsuario(req);
