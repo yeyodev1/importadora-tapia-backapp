@@ -24,7 +24,8 @@ export const PedidosEstadoController = {
   async updateEstado(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { estado, comentario, motivoRechazo } = req.body || {};
-      if (!ESTADOS_PEDIDO.includes(estado)) {
+      // Anular tiene su propia ruta (POST /:id/anular), con motivo y aviso.
+      if (!ESTADOS_PEDIDO.includes(estado) || estado === "anulado") {
         res.status(400).json({ success: false, message: "Estado inválido" });
         return;
       }
@@ -37,9 +38,13 @@ export const PedidosEstadoController = {
 
       // Un pedido que ya salió de bodega no cambia de estado.
       const id = String(req.params.id);
-      const actual = mongoose.isValidObjectId(id) ? await PedidoModel.findById(id).select("despacho") : null;
+      const actual = mongoose.isValidObjectId(id) ? await PedidoModel.findById(id).select("despacho estado") : null;
       if (!actual) {
         res.status(404).json({ success: false, message: "Pedido no encontrado" });
+        return;
+      }
+      if (actual.estado === "anulado") {
+        res.status(409).json({ success: false, message: "El pedido fue anulado: no se puede cambiar su estado" });
         return;
       }
       if (actual.despacho?.salidaAt) {
