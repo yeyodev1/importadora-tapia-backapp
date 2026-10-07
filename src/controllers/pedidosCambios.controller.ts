@@ -1,6 +1,6 @@
 import { Response, NextFunction } from "express";
 import mongoose from "mongoose";
-import { PedidoModel } from "../models/pedido.model";
+import { PedidoModel, claveLinea, entregadoPorLinea } from "../models/pedido.model";
 import { UserModel } from "../models/user.model";
 import { sendMail, pedidoAnuladoEmail, pedidoAjustadoEmail } from "../services/email.service";
 import { AuthRequest } from "../types/AuthRequest";
@@ -48,6 +48,13 @@ export const PedidosCambiosController = {
       }
       if (pedido.estado === "anulado" || pedido.estado === "rechazado") {
         res.status(409).json({ success: false, message: "Este pedido ya no está activo" });
+        return;
+      }
+      if (pedido.entregas?.length) {
+        res.status(409).json({
+          success: false,
+          message: "Ya salió una parte del pedido: en vez de anularlo, ajusta las cantidades a lo entregado",
+        });
         return;
       }
 
@@ -102,6 +109,8 @@ export const PedidosCambiosController = {
         return;
       }
 
+      // Lo que ya salió de bodega no se puede quitar.
+      const entregado = entregadoPorLinea(pedido.entregas);
       const cambios: { productoNombre: string; antes: number; despues: number }[] = [];
       const items = [];
       const aumentos: { productoCodigo: string; productoNombre: string; bodega?: string; cantidad: number }[] = [];
@@ -110,6 +119,11 @@ export const PedidosCambiosController = {
         const nueva = Number(cantidades[i]);
         if (!Number.isFinite(nueva) || nueva < 0) {
           res.status(400).json({ success: false, message: `Cantidad inválida para ${it.productoNombre}` });
+          return;
+        }
+        const salio = entregado[claveLinea(it)] || 0;
+        if (nueva < salio) {
+          res.status(400).json({ success: false, message: `${it.productoNombre}: ya salieron ${salio}, no puede quedar en menos` });
           return;
         }
         if (nueva > it.cantidad) {
@@ -155,6 +169,11 @@ export const PedidosCambiosController = {
       pedido.items = items;
       pedido.total = redondear(items.reduce((s, i) => s + i.subtotal, 0));
       pedido.ajustes = [...(pedido.ajustes || []), { at: new Date(), por, ...(nota ? { nota } : {}), cambios }];
+      // Si al bajar ya quedó todo entregado, el pedido queda despachado con la última salida.
+      const ultima = pedido.entregas?.[pedido.entregas.length - 1];
+      if (ultima && items.every((it) => (entregado[claveLinea(it)] || 0) >= it.cantidad)) {
+        pedido.set("despacho", { salidaAt: ultima.at, fotos: ultima.fotos, observacion: ultima.observacion, despachadoPor: ultima.por });
+      }
       await pedido.save();
       res.json({ success: true, data: pedido });
 
