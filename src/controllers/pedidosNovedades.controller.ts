@@ -24,7 +24,7 @@ export const PedidosNovedadesController = {
       else Object.assign(filtro, filtroPorBodega(await bodegaDeUsuario(req.user)));
 
       const data = await PedidoModel.find(filtro)
-        .select("numero clienteNombre estado despacho total vendedorNombre motivoEspera comentarioAprobacion createdAt updatedAt")
+        .select("numero clienteNombre estado despacho total vendedorNombre motivoEspera comentarioAprobacion anulacion ajustes historialEstado createdAt updatedAt")
         .sort({ updatedAt: 1 })
         .limit(50);
       res.json({ success: true, data, ahora });
