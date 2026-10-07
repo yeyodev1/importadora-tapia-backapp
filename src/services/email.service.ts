@@ -143,6 +143,52 @@ export function pedidoEstadoEmail(p: {
   };
 }
 
+/** Aviso de pedido anulado (al vendedor si anuló administración; a administración si anuló el vendedor). */
+export function pedidoAnuladoEmail(p: {
+  numero: string;
+  clienteNombre: string;
+  total: number;
+  motivo: string;
+  por: string;
+}): { subject: string; html: string } {
+  return {
+    subject: `Pedido ${p.numero} anulado`,
+    html: shell(
+      `Pedido <span style="color:#E5484D">ANULADO</span>`,
+      `<p>El pedido <b>${p.numero}</b> para <b>${esc(p.clienteNombre)}</b> (${money(p.total)}) fue anulado por <b>${esc(p.por)}</b>.</p>
+       <p style="background:#fdecee;border-radius:8px;padding:10px 14px;color:#E5484D">Motivo: ${esc(p.motivo)}</p>
+       <p>No se despacha y su stock vuelve a quedar disponible.</p>`
+    ),
+  };
+}
+
+/** Aviso al vendedor: administración bajó cantidades de su pedido. */
+export function pedidoAjustadoEmail(p: {
+  numero: string;
+  clienteNombre: string;
+  total: number;
+  por: string;
+  nota?: string;
+  cambios: { productoNombre: string; antes: number; despues: number }[];
+}): { subject: string; html: string } {
+  const filas = p.cambios
+    .map(
+      (c) =>
+        `<tr><td style="padding:8px 14px">${esc(c.productoNombre)}</td><td style="padding:8px 14px;text-align:right;white-space:nowrap">${c.antes} → <b>${c.despues === 0 ? "quitado" : c.despues}</b></td></tr>`
+    )
+    .join("");
+  return {
+    subject: `Tu pedido ${p.numero} cambió de cantidades`,
+    html: shell(
+      `Tu pedido fue <span style="color:#C27C0E">AJUSTADO</span>`,
+      `<p><b>${esc(p.por)}</b> ajustó tu pedido <b>${p.numero}</b> para <b>${esc(p.clienteNombre)}</b>:</p>
+       <table style="width:100%;background:#f5f7fa;border-radius:8px;margin:12px 0">${filas}</table>
+       ${p.nota ? `<p style="background:#fdf4e3;border-radius:8px;padding:10px 14px;color:#C27C0E">Mensaje de administración: ${esc(p.nota)}</p>` : ""}
+       <p>Nuevo total: <b>${money(p.total)}</b>. Avísale al cliente.</p>`
+    ),
+  };
+}
+
 /** Aviso al vendedor: su cobro fue aplicado o rechazado. */
 export function cobroEstadoEmail(p: {
   numero: string;
