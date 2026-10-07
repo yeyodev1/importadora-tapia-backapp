@@ -9,6 +9,7 @@ import { uploadComprobante, esUrlCloudinaryPropia, firmaSubidaDirecta } from "..
 import { AuthRequest } from "../types/AuthRequest";
 import { validarSoloContado } from "../services/reglasProducto.service";
 import { validarBodegaVendedor } from "../services/asignacionInventario.service";
+import { validarCupos } from "../services/cupos.service";
 import { bodegaDeUsuario, filtroPorBodega } from "../services/bodegaUsuario.service";
 
 /** Correos de todos los administradores (para avisos de aprobación). */
@@ -95,6 +96,13 @@ export const PedidosController = {
       const errorContado = await validarSoloContado(parsed, plazo);
       if (errorContado) {
         res.status(400).json({ success: false, message: errorContado });
+        return;
+      }
+
+      // Productos con cupo por asesor (p.ej. un contenedor repartido entre asesores).
+      const errorCupo = await validarCupos(parsed, req.user!.venCodigo);
+      if (errorCupo) {
+        res.status(409).json({ success: false, message: errorCupo });
         return;
       }
 
