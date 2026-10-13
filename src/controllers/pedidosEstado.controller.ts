@@ -4,6 +4,7 @@ import { PedidoModel, EstadoPedido, ESTADOS_PEDIDO } from "../models/pedido.mode
 import { UserModel } from "../models/user.model";
 import { sendMail, pedidoEstadoEmail } from "../services/email.service";
 import { AuthRequest } from "../types/AuthRequest";
+import { excesoCupo, ESTADOS_CON_CUPO } from "../services/cupos.service";
 
 /** Nombre del admin para el historial (si no se encuentra, su correo). */
 async function nombreAdmin(req: AuthRequest): Promise<string> {
@@ -38,7 +39,7 @@ export const PedidosEstadoController = {
 
       // Un pedido que ya salió de bodega no cambia de estado.
       const id = String(req.params.id);
-      const actual = mongoose.isValidObjectId(id) ? await PedidoModel.findById(id).select("despacho estado") : null;
+      const actual = mongoose.isValidObjectId(id) ? await PedidoModel.findById(id).select("despacho estado items venCodigo createdAt") : null;
       if (!actual) {
         res.status(404).json({ success: false, message: "Pedido no encontrado" });
         return;
@@ -53,6 +54,19 @@ export const PedidosEstadoController = {
       }
 
       const nuevo = estado as EstadoPedido;
+
+      // Un pedido no aprobado ya devolvió su cupo: si se vuelve a activar
+      // (aprobar o poner en espera), tiene que caber de nuevo en el cupo del asesor.
+      if (!ESTADOS_CON_CUPO.includes(actual.estado) && ESTADOS_CON_CUPO.includes(nuevo)) {
+        const e = await excesoCupo(actual.items, actual.venCodigo, actual.createdAt);
+        if (e) {
+          res.status(409).json({
+            success: false,
+            message: `No se puede reactivar: el asesor se pasa del cupo de ${e.producto}. Su cupo es ${e.cupo}, ya pidió ${e.usado} y le quedan ${e.queda}; este pedido trae ${e.pide}.`,
+          });
+          return;
+        }
+      }
       const set: Record<string, unknown> = { estado: nuevo };
       const unset: Record<string, 1> = {};
       if (nuevo === "aprobado") {

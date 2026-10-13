@@ -74,7 +74,7 @@ export const UsersController = {
           res.status(422).json({ success: false, message: `El vendedor ${venCodigo} no existe en el ERP` });
           return;
         }
-        finalVenCodigo = String(venCodigo);
+        finalVenCodigo = String(venCodigo).trim();
         finalName = finalName || erpName;
       }
 
@@ -135,7 +135,7 @@ export const UsersController = {
           res.status(422).json({ success: false, message: `El vendedor ${venCodigo} no existe en el ERP` });
           return;
         }
-        user.venCodigo = String(venCodigo);
+        user.venCodigo = String(venCodigo).trim();
       }
       // Bodega que atiende (solo rol bodega); a los demás roles se les limpia.
       if (bodega !== undefined || user.role !== "bodega") {

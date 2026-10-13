@@ -1,6 +1,6 @@
 import { Response, NextFunction } from "express";
-import mongoose from "mongoose";
-import { PedidoModel, PedidoItem } from "../models/pedido.model";
+import mongoose, { HydratedDocument } from "mongoose";
+import { PedidoModel, PedidoItem, IPedido } from "../models/pedido.model";
 import { UserModel } from "../models/user.model";
 import { nextSeq, formatDoc } from "../models/counter.model";
 import { sendMail, pedidoNuevoEmail } from "../services/email.service";
@@ -11,6 +11,7 @@ import { validarSoloContado } from "../services/reglasProducto.service";
 import { validarBodegaVendedor } from "../services/asignacionInventario.service";
 import { validarCupos } from "../services/cupos.service";
 import { bodegaDeUsuario, filtroPorBodega } from "../services/bodegaUsuario.service";
+import { conCandadoAsesor, CandadoOcupadoError } from "../services/candadoAsesor.service";
 
 /** Correos de todos los administradores (para avisos de aprobación). */
 async function adminEmails(): Promise<string[]> {
@@ -18,16 +19,41 @@ async function adminEmails(): Promise<string[]> {
   return admins.map((a) => a.email);
 }
 
+/** Para buscar "Velez" y encontrar "Vélez" (y al revés). */
+const TILDES: Record<string, string> = { a: "[aáà]", e: "[eéè]", i: "[iíì]", o: "[oóò]", u: "[uúüù]", n: "[nñ]" };
+const sinTildes = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/** Código ERP vigente del vendedor (el de la BD; si no está, el del token). */
+async function venCodigoActual(req: AuthRequest): Promise<string | undefined> {
+  if (req.user?.role !== "vendedor") return req.user?.venCodigo;
+  const u = mongoose.isValidObjectId(req.user.id) ? await UserModel.findById(req.user.id).select("venCodigo").lean() : null;
+  return (u?.venCodigo || req.user.venCodigo || "").trim() || undefined;
+}
+
 export const PedidosController = {
   async list(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       // Vendedor: solo los suyos. Bodega con bodega asignada (p.ej. Quito):
       // solo los pedidos con productos de su bodega.
-      const filtro =
+      const filtro: Record<string, unknown> =
         req.user?.role === "vendedor"
           ? { vendedorId: req.user.id }
           : filtroPorBodega(await bodegaDeUsuario(req.user));
-      const pedidos = await PedidoModel.find(filtro).sort({ createdAt: -1 }).limit(200);
+      // ?q= busca en todo el historial (no solo los últimos 200): cliente, OP o asesor.
+      const q = String(req.query.q || "").trim().slice(0, 80);
+      if (q.length >= 2) {
+        const re = new RegExp(sinTildes(q).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/[aeioun]/g, (v) => TILDES[v]), "i");
+        // El pedido guarda el correo del asesor: por su nombre se busca en usuarios.
+        const asesores = await UserModel.find({ name: re }).select("_id").lean();
+        filtro.$or = [
+          { clienteNombre: re },
+          { numero: re },
+          { clienteCodigo: re },
+          { vendedorNombre: re },
+          ...(asesores.length ? [{ vendedorId: { $in: asesores.map((u) => String(u._id)) } }] : []),
+        ];
+      }
+      const pedidos = await PedidoModel.find(filtro).sort({ createdAt: -1 }).limit(q.length >= 2 ? 300 : 200);
       res.json({ success: true, data: pedidos });
     } catch (error) {
       next(error);
@@ -99,20 +125,6 @@ export const PedidosController = {
         return;
       }
 
-      // Productos con cupo por asesor (p.ej. un contenedor repartido entre asesores).
-      const errorCupo = await validarCupos(parsed, req.user!.venCodigo);
-      if (errorCupo) {
-        res.status(409).json({ success: false, message: errorCupo });
-        return;
-      }
-
-      // Reserva al enviar: bloquear si supera el disponible (stock ERP - reservas).
-      const errorStock = await validarDisponibilidad(parsed);
-      if (errorStock) {
-        res.status(409).json({ success: false, message: `Sin stock disponible. ${errorStock}` });
-        return;
-      }
-
       const total = Math.round(parsed.reduce((s, i) => s + i.subtotal, 0) * 100) / 100;
 
       // Foto de la orden de pedido (OP): la app la sube directo a Cloudinary y
@@ -127,21 +139,53 @@ export const PedidosController = {
       }
       if (!listaFotos.length && foto) listaFotos.push(await uploadComprobante(foto, "tapia-pedidos"));
 
-      const numero = formatDoc("OP", await nextSeq("pedido"));
-      const pedido = await PedidoModel.create({
-        numero,
-        vendedorId: req.user!.id,
-        vendedorNombre: req.user!.email,
-        venCodigo: req.user!.venCodigo,
-        clienteNombre,
-        clienteCodigo,
-        items: parsed,
-        total,
-        plazoCreditoDias: plazo,
-        fotoUrl: listaFotos[0],
-        fotos: listaFotos.length ? listaFotos : undefined,
-        observacion,
-      });
+      // El código del asesor se lee de la BD: el token (8 h) puede traer uno viejo
+      // si el admin se lo cambió, y entonces el cupo no le aplicaría.
+      const venCodigo = await venCodigoActual(req);
+
+      // Cupo, stock y creación con el candado del asesor: dos pedidos suyos al
+      // mismo tiempo no se validan contra el mismo cupo.
+      let resultado: { error: string } | { pedido: HydratedDocument<IPedido> };
+      try {
+        resultado = await conCandadoAsesor(venCodigo, async () => {
+          // Productos con cupo por asesor (p.ej. un contenedor repartido entre asesores).
+          const errorCupo = await validarCupos(parsed, venCodigo);
+          if (errorCupo) return { error: errorCupo };
+
+          // Reserva al enviar: bloquear si supera el disponible (stock ERP - reservas).
+          const errorStock = await validarDisponibilidad(parsed);
+          if (errorStock) return { error: `Sin stock disponible. ${errorStock}` };
+
+          const numero = formatDoc("OP", await nextSeq("pedido"));
+          const pedido = await PedidoModel.create({
+            numero,
+            vendedorId: req.user!.id,
+            vendedorNombre: req.user!.email,
+            venCodigo,
+            clienteNombre,
+            clienteCodigo,
+            items: parsed,
+            total,
+            plazoCreditoDias: plazo,
+            fotoUrl: listaFotos[0],
+            fotos: listaFotos.length ? listaFotos : undefined,
+            observacion,
+          });
+          return { pedido };
+        });
+      } catch (e) {
+        if (e instanceof CandadoOcupadoError) {
+          res.status(409).json({ success: false, message: e.message });
+          return;
+        }
+        throw e;
+      }
+      if ("error" in resultado) {
+        res.status(409).json({ success: false, message: resultado.error });
+        return;
+      }
+      const { pedido } = resultado;
+      const numero = pedido.numero;
 
       res.status(201).json({ success: true, data: pedido });
 

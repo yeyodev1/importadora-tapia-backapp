@@ -36,13 +36,15 @@ export const CuposController = {
   },
 
   /**
-   * Fija los cupos de un producto. body: { proNombre?, cupos: [{venCodigo, nombre?, cantidad}], reiniciar? }
+   * Fija los cupos de un producto. body: { proNombre?, cupos: [{venCodigo, nombre?, cantidad}], reiniciar?, desde? }
    * `reiniciar` (o un cupo nuevo) empieza a contar desde ahora: úsalo cuando llega mercadería nueva.
+   * `desde` ("AAAA-MM-DD", hora de Ecuador) cuenta lo pedido desde ese día, p.ej. el día que
+   * llegó el contenedor: así lo que el asesor ya pidió antes de fijar el cupo también cuenta.
    */
   async save(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const proCodigo = String(req.params.proCodigo || "").trim();
-      const { proNombre, cupos, reiniciar } = req.body || {};
+      const { proNombre, cupos, reiniciar, desde: desdeTxt } = req.body || {};
       if (!proCodigo) {
         res.status(400).json({ success: false, message: "proCodigo requerido" });
         return;
@@ -50,6 +52,14 @@ export const CuposController = {
       if (!Array.isArray(cupos)) {
         res.status(400).json({ success: false, message: "Envía la lista de cupos" });
         return;
+      }
+      let desdeFijo: Date | null = null;
+      if (desdeTxt) {
+        desdeFijo = /^\d{4}-\d{2}-\d{2}$/.test(String(desdeTxt)) ? new Date(`${desdeTxt}T00:00:00-05:00`) : null;
+        if (!desdeFijo || Number.isNaN(desdeFijo.getTime()) || desdeFijo.getTime() > Date.now()) {
+          res.status(400).json({ success: false, message: "La fecha desde la que cuenta el cupo no es válida (no puede ser futura)" });
+          return;
+        }
       }
       const lista = [];
       const vistos = new Set<string>();
@@ -78,7 +88,7 @@ export const CuposController = {
         {
           proCodigo,
           ...(proNombre ? { proNombre: String(proNombre) } : {}),
-          desde: !actual || reiniciar ? new Date() : actual.desde,
+          desde: desdeFijo || (!actual || reiniciar ? new Date() : actual.desde),
           cupos: lista,
           actualizadoPor: req.user!.email,
         },
