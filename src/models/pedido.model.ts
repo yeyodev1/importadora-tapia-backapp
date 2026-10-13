@@ -5,10 +5,16 @@ import mongoose, { Schema, Document } from "mongoose";
  * (p.ej. que respalde facturas pendientes). Luego lo aprueba o rechaza.
  * "anulado": el pedido se cae después de enviado o aprobado (el cliente ya no
  * lo quiere, se pasó del cupo...). Libera el stock y no se despacha.
+ * "rechazado_cliente": el pedido aprobado llegó (o iba a llegar) y el cliente
+ * no lo recibió: la mercadería regresa. Ya no queda pendiente de entregar,
+ * devuelve el cupo y no suma en ventas.
  */
-export type EstadoPedido = "enviado" | "aprobado" | "rechazado" | "en_espera" | "anulado";
+export type EstadoPedido = "enviado" | "aprobado" | "rechazado" | "en_espera" | "anulado" | "rechazado_cliente";
 
-export const ESTADOS_PEDIDO: EstadoPedido[] = ["enviado", "aprobado", "rechazado", "en_espera", "anulado"];
+export const ESTADOS_PEDIDO: EstadoPedido[] = ["enviado", "aprobado", "rechazado", "en_espera", "anulado", "rechazado_cliente"];
+
+/** Estados terminados: ya no cambian de estado, no se anulan ni se ajustan. */
+export const ESTADOS_CERRADOS: EstadoPedido[] = ["rechazado", "anulado", "rechazado_cliente"];
 
 /** Quién anuló el pedido, por qué y cuándo. */
 export interface Anulacion {
@@ -101,6 +107,8 @@ export interface IPedido extends Document {
   motivoEspera?: string;
   historialEstado?: CambioEstado[];
   anulacion?: Anulacion;
+  /** El cliente no recibió el pedido: motivo, quién lo registró y si ya había salido de bodega. */
+  rechazoCliente?: Anulacion & { yaHabiaSalido: boolean };
   ajustes?: AjustePedido[];
   estado: EstadoPedido;
   createdAt: Date;
@@ -210,6 +218,19 @@ const pedidoSchema = new Schema<IPedido>(
           por: { type: String, required: true },
           rol: { type: String, required: true },
           at: { type: Date, required: true },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
+    rechazoCliente: {
+      type: new Schema(
+        {
+          motivo: { type: String, required: true },
+          por: { type: String, required: true },
+          rol: { type: String, required: true },
+          at: { type: Date, required: true },
+          yaHabiaSalido: { type: Boolean, default: false },
         },
         { _id: false }
       ),

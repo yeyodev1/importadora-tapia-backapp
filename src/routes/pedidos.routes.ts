@@ -24,6 +24,8 @@ pedidosRouter.post("/", sinBodega, PedidosController.create);
 pedidosRouter.patch("/:id/estado", adminOnly, PedidosEstadoController.updateEstado);
 // Anular un pedido que aún no sale (admin cualquiera; vendedor los suyos). Libera stock.
 pedidosRouter.post("/:id/anular", sinBodega, PedidosCambiosController.anular);
+// El cliente no recibió un pedido aprobado (admin, quien despacha en su bodega o su asesor).
+pedidosRouter.post("/:id/rechazo-cliente", PedidosCambiosController.rechazoCliente);
 // Admin baja cantidades o quita líneas de un pedido que aún no sale.
 pedidosRouter.patch("/:id/items", adminOnly, PedidosCambiosController.ajustar);
 pedidosRouter.patch("/:id/fotos", sinBodega, PedidosController.updateFotos);

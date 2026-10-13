@@ -26,7 +26,7 @@ export const PedidosEstadoController = {
     try {
       const { estado, comentario, motivoRechazo } = req.body || {};
       // Anular tiene su propia ruta (POST /:id/anular), con motivo y aviso.
-      if (!ESTADOS_PEDIDO.includes(estado) || estado === "anulado") {
+      if (!ESTADOS_PEDIDO.includes(estado) || estado === "anulado" || estado === "rechazado_cliente") {
         res.status(400).json({ success: false, message: "Estado inválido" });
         return;
       }
@@ -46,6 +46,10 @@ export const PedidosEstadoController = {
       }
       if (actual.estado === "anulado") {
         res.status(409).json({ success: false, message: "El pedido fue anulado: no se puede cambiar su estado" });
+        return;
+      }
+      if (actual.estado === "rechazado_cliente") {
+        res.status(409).json({ success: false, message: "El cliente rechazó este pedido: no se puede cambiar su estado" });
         return;
       }
       if (actual.despacho?.salidaAt) {

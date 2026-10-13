@@ -10,6 +10,7 @@ function motivoNoDespacha(estado: string): string {
   if (estado === "en_espera") return "Este pedido está en espera por administración: aún no se despacha.";
   if (estado === "enviado") return "Este pedido aún no está aprobado por administración: no se puede despachar.";
   if (estado === "anulado") return "Este pedido fue anulado: no se despacha.";
+  if (estado === "rechazado_cliente") return "El cliente rechazó este pedido: no se despacha.";
   return "Este pedido fue rechazado: no se despacha.";
 }
 

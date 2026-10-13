@@ -162,6 +162,26 @@ export function pedidoAnuladoEmail(p: {
   };
 }
 
+/** Aviso de que el cliente no recibió el pedido (a administración y al asesor). */
+export function pedidoRechazadoClienteEmail(p: {
+  numero: string;
+  clienteNombre: string;
+  total: number;
+  motivo: string;
+  por: string;
+  yaHabiaSalido: boolean;
+}): { subject: string; html: string } {
+  return {
+    subject: `Pedido ${p.numero} rechazado por el cliente`,
+    html: shell(
+      `Pedido <span style="color:#E5484D">RECHAZADO POR EL CLIENTE</span>`,
+      `<p>El cliente <b>${esc(p.clienteNombre)}</b> no recibió el pedido <b>${p.numero}</b> (${money(p.total)}). Lo registró <b>${esc(p.por)}</b>.</p>
+       <p style="background:#fdecee;border-radius:8px;padding:10px 14px;color:#E5484D">Motivo: ${esc(p.motivo)}</p>
+       <p>${p.yaHabiaSalido ? "La mercadería ya había salido de bodega y regresa." : "No se despacha."} El pedido ya no queda pendiente de entregar. Recuerda revertirlo en el sistema de Tapia.</p>`
+    ),
+  };
+}
+
 /** Aviso al vendedor: administración bajó cantidades de su pedido. */
 export function pedidoAjustadoEmail(p: {
   numero: string;

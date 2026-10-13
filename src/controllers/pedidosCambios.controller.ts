@@ -1,8 +1,9 @@
 import { Response, NextFunction } from "express";
 import mongoose from "mongoose";
-import { PedidoModel, claveLinea, entregadoPorLinea } from "../models/pedido.model";
+import { PedidoModel, claveLinea, entregadoPorLinea, ESTADOS_CERRADOS } from "../models/pedido.model";
 import { UserModel } from "../models/user.model";
-import { sendMail, pedidoAnuladoEmail, pedidoAjustadoEmail } from "../services/email.service";
+import { sendMail, pedidoAnuladoEmail, pedidoAjustadoEmail, pedidoRechazadoClienteEmail } from "../services/email.service";
+import { accesoDeUsuario, pedidoEsDeBodega } from "../services/bodegaUsuario.service";
 import { AuthRequest } from "../types/AuthRequest";
 import { validarDisponibilidad } from "../services/stock.service";
 import { validarCupos } from "../services/cupos.service";
@@ -18,6 +19,70 @@ async function nombreUsuario(req: AuthRequest): Promise<string> {
 const redondear = (n: number) => Math.round(n * 100) / 100;
 
 export const PedidosCambiosController = {
+  /**
+   * El cliente no recibió un pedido aprobado (no lo pidió, no estaba, lo
+   * devolvió...): queda "Rechazado por el cliente", sale de lo pendiente de
+   * entregar, devuelve el cupo y deja de sumar en ventas. Vale aunque ya haya
+   * salido de bodega (la mercadería regresa). Lo registra administración,
+   * quien despacha en la bodega del pedido o el asesor del pedido.
+   * body: { motivo }
+   */
+  async rechazoCliente(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const motivo = String(req.body?.motivo ?? "").trim().slice(0, 500);
+      if (motivo.length < 3) {
+        res.status(400).json({ success: false, message: "Escribe por qué el cliente no recibió el pedido" });
+        return;
+      }
+      const id = String(req.params.id);
+      const pedido = mongoose.isValidObjectId(id) ? await PedidoModel.findById(id) : null;
+      if (!pedido) {
+        res.status(404).json({ success: false, message: "Pedido no encontrado" });
+        return;
+      }
+
+      const esAdmin = req.user?.role === "admin";
+      const esSuyo = pedido.vendedorId === req.user?.id;
+      let despacha = false;
+      if (!esAdmin && !esSuyo) {
+        const { roles, bodega } = await accesoDeUsuario(req.user);
+        despacha = roles.includes("bodega") && pedidoEsDeBodega(pedido.items, bodega);
+      }
+      if (!esAdmin && !esSuyo && !despacha) {
+        res.status(403).json({ success: false, message: "Solo administración, bodega o el asesor del pedido pueden registrarlo" });
+        return;
+      }
+      if (pedido.estado !== "aprobado") {
+        res.status(409).json({
+          success: false,
+          message: pedido.estado === "rechazado_cliente"
+            ? "Este pedido ya está marcado como rechazado por el cliente"
+            : "Solo un pedido aprobado puede quedar rechazado por el cliente (si aún no se aprueba, anúlalo)",
+        });
+        return;
+      }
+
+      const por = await nombreUsuario(req);
+      const at = new Date();
+      const yaHabiaSalido = Boolean(pedido.despacho?.salidaAt || pedido.entregas?.length);
+      pedido.estado = "rechazado_cliente";
+      pedido.rechazoCliente = { motivo, por, rol: req.user!.role, at, yaHabiaSalido };
+      pedido.historialEstado = [...(pedido.historialEstado || []), { estado: "rechazado_cliente", nota: motivo, por, at }];
+      await pedido.save();
+      res.json({ success: true, data: pedido });
+
+      // Aviso a administración y al asesor (menos a quien lo registró).
+      const mail = pedidoRechazadoClienteEmail({ numero: pedido.numero, clienteNombre: pedido.clienteNombre, total: pedido.total, motivo, por, yaHabiaSalido });
+      UserModel.find({ $or: [{ role: "admin" }, ...(mongoose.isValidObjectId(pedido.vendedorId) ? [{ _id: pedido.vendedorId }] : [])] })
+        .select("email")
+        .then((us) => us.map((u) => u.email).filter((e) => e !== req.user?.email))
+        .then((emails) => Promise.all(emails.map((to) => sendMail({ to, ...mail }))))
+        .catch(() => {});
+    } catch (error) {
+      next(error);
+    }
+  },
+
   /**
    * Anula un pedido que todavía no sale de bodega (enviado, en espera o
    * aprobado): el cliente ya no lo quiere, se pasó del cupo, etc. Libera el
@@ -46,7 +111,7 @@ export const PedidosCambiosController = {
         res.status(409).json({ success: false, message: "El pedido ya salió de bodega: no se puede anular" });
         return;
       }
-      if (pedido.estado === "anulado" || pedido.estado === "rechazado") {
+      if (ESTADOS_CERRADOS.includes(pedido.estado)) {
         res.status(409).json({ success: false, message: "Este pedido ya no está activo" });
         return;
       }
@@ -100,7 +165,7 @@ export const PedidosCambiosController = {
         res.status(409).json({ success: false, message: "El pedido ya salió de bodega: no se puede ajustar" });
         return;
       }
-      if (pedido.estado === "anulado" || pedido.estado === "rechazado") {
+      if (ESTADOS_CERRADOS.includes(pedido.estado)) {
         res.status(409).json({ success: false, message: "Este pedido ya no está activo" });
         return;
       }
