@@ -1,7 +1,7 @@
 import { Response, NextFunction } from "express";
 import { PedidoModel } from "../models/pedido.model";
 import { AuthRequest } from "../types/AuthRequest";
-import { bodegaDeUsuario, filtroPorBodega } from "../services/bodegaUsuario.service";
+import { filtroPedidosDe } from "../services/bodegaUsuario.service";
 
 const HORA = 3600 * 1000;
 
@@ -20,11 +20,10 @@ export const PedidosNovedadesController = {
 
       // 2 s de solape: la app descarta repetidos, así no se pierde nada entre consultas.
       const filtro: Record<string, unknown> = { updatedAt: { $gt: new Date(desde.getTime() - 2000) } };
-      if (req.user?.role === "vendedor") filtro.vendedorId = req.user.id;
-      else Object.assign(filtro, filtroPorBodega(await bodegaDeUsuario(req.user)));
+      Object.assign(filtro, await filtroPedidosDe(req.user));
 
       const data = await PedidoModel.find(filtro)
-        .select("numero clienteNombre estado despacho total vendedorNombre motivoEspera comentarioAprobacion anulacion ajustes entregas historialEstado createdAt updatedAt")
+        .select("numero vendedorId items.bodega clienteNombre estado despacho total vendedorNombre motivoEspera comentarioAprobacion anulacion ajustes entregas historialEstado createdAt updatedAt")
         .sort({ updatedAt: 1 })
         .limit(50);
       res.json({ success: true, data, ahora });

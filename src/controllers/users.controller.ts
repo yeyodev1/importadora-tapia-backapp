@@ -2,7 +2,7 @@ import { Response, NextFunction } from "express";
 import { UserModel } from "../models/user.model";
 import { ErpService } from "../services/erp.service";
 import { sendMail, welcomeEmail } from "../services/email.service";
-import { AuthRequest } from "../types/AuthRequest";
+import { AuthRequest, UserRole } from "../types/AuthRequest";
 
 function publicUser(u: any) {
   return {
@@ -10,6 +10,7 @@ function publicUser(u: any) {
     email: u.email,
     name: u.name,
     role: u.role,
+    rolesExtra: u.rolesExtra || [],
     venCodigo: u.venCodigo || null,
     bodega: u.bodega || null,
     debeCambiarCorreo: Boolean(u.debeCambiarCorreo),
@@ -18,11 +19,20 @@ function publicUser(u: any) {
 }
 
 /**
- * Bodega (bod_nombre) que atiende un usuario de bodega. Solo aplica al rol
- * "bodega"; vacío = ve todas las bodegas.
+ * Funciones extra que el admin le suma al rol principal. Hoy solo un vendedor
+ * puede además despachar en bodega (p.ej. el jefe de bodega de Quito que vende).
  */
-function bodegaPara(role: string, bodega: unknown): string | undefined {
-  if (role !== "bodega") return undefined;
+function rolesExtraPara(role: string, rolesExtra: unknown): UserRole[] {
+  if (role !== "vendedor" || !Array.isArray(rolesExtra)) return [];
+  return rolesExtra.includes("bodega") ? ["bodega"] : [];
+}
+
+/**
+ * Bodega (bod_nombre) que atiende quien despacha (rol bodega o vendedor con
+ * función de bodega); vacío = ve todas las bodegas.
+ */
+function bodegaPara(role: string, rolesExtra: UserRole[], bodega: unknown): string | undefined {
+  if (role !== "bodega" && !rolesExtra.includes("bodega")) return undefined;
   const b = String(bodega ?? "").trim();
   return b || undefined;
 }
@@ -45,7 +55,7 @@ export const UsersController = {
 
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { email, password, role, venCodigo, name, bodega } = req.body || {};
+      const { email, password, role, venCodigo, name, bodega, rolesExtra } = req.body || {};
       if (!email || !password || !role) {
         res.status(400).json({ success: false, message: "email, password y role son requeridos" });
         return;
@@ -83,13 +93,15 @@ export const UsersController = {
         return;
       }
 
+      const extras = rolesExtraPara(role, rolesExtra);
       const user = await UserModel.create({
         email,
         password,
         name: finalName,
         role,
         venCodigo: finalVenCodigo,
-        bodega: bodegaPara(role, bodega),
+        rolesExtra: extras.length ? extras : undefined,
+        bodega: bodegaPara(role, extras, bodega),
       });
 
       // Correo de bienvenida con credenciales; si falla no bloquea la creación.
@@ -104,7 +116,7 @@ export const UsersController = {
 
   async update(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { email, name, password, venCodigo, bodega, debeCambiarCorreo } = req.body || {};
+      const { email, name, password, venCodigo, bodega, debeCambiarCorreo, rolesExtra } = req.body || {};
       const user = await UserModel.findById(req.params.id).select("+password");
       if (!user) {
         res.status(404).json({ success: false, message: "Usuario no encontrado" });
@@ -137,10 +149,15 @@ export const UsersController = {
         }
         user.venCodigo = String(venCodigo).trim();
       }
-      // Bodega que atiende (solo rol bodega); a los demás roles se les limpia.
-      if (bodega !== undefined || user.role !== "bodega") {
-        const b = bodegaPara(user.role, bodega ?? user.bodega);
-        user.set("bodega", b);
+      // Funciones extra (p.ej. vendedor que también despacha en bodega).
+      if (rolesExtra !== undefined) {
+        const extras = rolesExtraPara(user.role, rolesExtra);
+        user.set("rolesExtra", extras.length ? extras : undefined);
+      }
+      // Bodega que atiende (rol bodega o quien despacha); a los demás se les limpia.
+      const extrasActuales = (user.rolesExtra || []) as UserRole[];
+      if (bodega !== undefined || (user.role !== "bodega" && !extrasActuales.includes("bodega"))) {
+        user.set("bodega", bodegaPara(user.role, extrasActuales, bodega ?? user.bodega));
       }
 
       // Pedir (o cancelar el pedido) que la persona ponga su propio correo.

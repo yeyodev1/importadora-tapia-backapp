@@ -34,7 +34,8 @@ function firmarToken(user: IUser): string {
     email: user.email,
     role: user.role,
     ...(user.venCodigo ? { venCodigo: user.venCodigo } : {}),
-    ...(user.role === "bodega" && user.bodega ? { bodega: user.bodega } : {}),
+    ...(user.rolesExtra?.length ? { rolesExtra: user.rolesExtra } : {}),
+    ...((user.role === "bodega" || user.rolesExtra?.includes("bodega")) && user.bodega ? { bodega: user.bodega } : {}),
   };
   return jwt.sign(payload, process.env.JWT_SECRET as string, { expiresIn: "8h" });
 }
@@ -46,6 +47,7 @@ function usuarioPublico(user: IUser) {
     email: user.email,
     name: user.name,
     role: user.role,
+    rolesExtra: user.rolesExtra || [],
     venCodigo: user.venCodigo || null,
     bodega: user.bodega || null,
     debeCambiarCorreo: Boolean(user.debeCambiarCorreo),

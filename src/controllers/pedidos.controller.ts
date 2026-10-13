@@ -10,7 +10,7 @@ import { AuthRequest } from "../types/AuthRequest";
 import { validarSoloContado } from "../services/reglasProducto.service";
 import { validarBodegaVendedor } from "../services/asignacionInventario.service";
 import { validarCupos } from "../services/cupos.service";
-import { bodegaDeUsuario, filtroPorBodega } from "../services/bodegaUsuario.service";
+import { filtroPedidosDe } from "../services/bodegaUsuario.service";
 import { conCandadoAsesor, CandadoOcupadoError } from "../services/candadoAsesor.service";
 
 /** Correos de todos los administradores (para avisos de aprobación). */
@@ -34,14 +34,14 @@ export const PedidosController = {
   async list(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       // Vendedor: solo los suyos. Bodega con bodega asignada (p.ej. Quito):
-      // solo los pedidos con productos de su bodega.
-      const filtro: Record<string, unknown> =
-        req.user?.role === "vendedor"
-          ? { vendedorId: req.user.id }
-          : filtroPorBodega(await bodegaDeUsuario(req.user));
+      // solo los pedidos con productos de su bodega. Vendedor que también
+      // despacha: los suyos y los de su bodega.
+      const filtro: Record<string, unknown> = { ...(await filtroPedidosDe(req.user)) };
       // ?q= busca en todo el historial (no solo los últimos 200): cliente, OP o asesor.
       const q = String(req.query.q || "").trim().slice(0, 80);
       if (q.length >= 2) {
+        const alcance = filtro.$or ? { $or: filtro.$or } : null;
+        delete filtro.$or;
         const re = new RegExp(sinTildes(q).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/[aeioun]/g, (v) => TILDES[v]), "i");
         // El pedido guarda el correo del asesor: por su nombre se busca en usuarios.
         const asesores = await UserModel.find({ name: re }).select("_id").lean();
@@ -52,6 +52,7 @@ export const PedidosController = {
           { vendedorNombre: re },
           ...(asesores.length ? [{ vendedorId: { $in: asesores.map((u) => String(u._id)) } }] : []),
         ];
+        if (alcance) filtro.$and = [alcance];
       }
       const pedidos = await PedidoModel.find(filtro).sort({ createdAt: -1 }).limit(q.length >= 2 ? 300 : 200);
       res.json({ success: true, data: pedidos });

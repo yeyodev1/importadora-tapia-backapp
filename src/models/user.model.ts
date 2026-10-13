@@ -10,6 +10,11 @@ export interface IUser extends Document {
   /** Código del vendedor en el ERP (vw_crm_vendedores); requerido si role = vendedor. */
   venCodigo?: string;
   /**
+   * Funciones que el admin le suma al rol principal. Hoy: un vendedor que
+   * también despacha en bodega (["bodega"]), como el jefe de bodega de Quito.
+   */
+  rolesExtra?: UserRole[];
+  /**
    * Bodega (bod_nombre del ERP) que atiende un usuario de rol "bodega"; solo
    * ve los pedidos con productos de esa bodega. Vacío = ve todas las bodegas.
    */
@@ -41,6 +46,7 @@ const userSchema = new Schema<IUser>(
     name: { type: String, required: true, trim: true },
     role: { type: String, enum: ["admin", "vendedor", "bodega"], default: "vendedor" },
     venCodigo: { type: String },
+    rolesExtra: { type: [String], enum: ["bodega"], default: undefined },
     bodega: { type: String, trim: true },
     resetTokenHash: { type: String, select: false, index: true, sparse: true },
     resetTokenExpira: { type: Date, select: false },
