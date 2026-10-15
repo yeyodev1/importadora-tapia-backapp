@@ -5,9 +5,11 @@ import { UserModel } from "../models/user.model";
 import { nextSeq, formatDoc } from "../models/counter.model";
 import { sendMail, pedidoNuevoEmail } from "../services/email.service";
 import { validarDisponibilidad } from "../services/stock.service";
+import { cachedRead } from "../services/erpCache.service";
+import { ErpService } from "../services/erp.service";
 import { uploadComprobante, esUrlCloudinaryPropia, firmaSubidaDirecta } from "../services/cloudinary.service";
 import { AuthRequest } from "../types/AuthRequest";
-import { validarSoloContado } from "../services/reglasProducto.service";
+import { validarSoloContado, librasPorSaco } from "../services/reglasProducto.service";
 import { validarBodegaVendedor } from "../services/asignacionInventario.service";
 import { validarCupos } from "../services/cupos.service";
 import { filtroPedidosDe } from "../services/bodegaUsuario.service";
@@ -67,10 +69,23 @@ export const PedidosController = {
    */
   async create(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const { clienteNombre, clienteCodigo, items, observacion, foto, fotoUrl, fotos, plazoCreditoDias } = req.body || {};
+      const { items, observacion, foto, fotoUrl, fotos, plazoCreditoDias } = req.body || {};
 
+      // El cliente se elige del listado de clientes del ERP: no se escribe a mano.
+      const clienteCodigo = String(req.body?.clienteCodigo ?? "").trim();
+      if (!clienteCodigo) {
+        res.status(400).json({ success: false, message: "Elige el cliente del listado de clientes" });
+        return;
+      }
+      const clientes = await cachedRead("clientes", () => ErpService.getClientes() as Promise<any[]>);
+      const cliente = clientes.data.find((c) => String(c.per_codigo) === clienteCodigo);
+      if (!cliente && clientes.data.length) {
+        res.status(400).json({ success: false, message: "Ese cliente no está en el listado de clientes del ERP" });
+        return;
+      }
+      const clienteNombre = String(cliente?.per_nombre || req.body?.clienteNombre || "").trim();
       if (!clienteNombre) {
-        res.status(400).json({ success: false, message: "El cliente es requerido" });
+        res.status(400).json({ success: false, message: "Elige el cliente del listado de clientes" });
         return;
       }
       // El plazo de crédito es obligatorio: sin él administración no puede
@@ -85,9 +100,19 @@ export const PedidosController = {
         return;
       }
 
+      const sacos = await librasPorSaco();
       const parsed: PedidoItem[] = [];
       for (const it of items) {
-        const cantidad = Number(it.cantidad);
+        // Producto que sale en saco: el asesor pide sacos y se guarda en libras
+        // (la unidad del ERP) con las libras por saco que fija administración.
+        const factor = sacos.get(String(it.productoCodigo));
+        const nSacos = Number(it.sacos);
+        const enSacos = !!factor && it.sacos !== undefined && it.sacos !== null;
+        if (enSacos && !(nSacos > 0)) {
+          res.status(400).json({ success: false, message: `Cantidad de sacos inválida para ${it.productoNombre}` });
+          return;
+        }
+        const cantidad = enSacos ? Math.round(nSacos * factor! * 100) / 100 : Number(it.cantidad);
         const precioUnitario = Number(it.precioUnitario);
         if (!it.productoCodigo || !it.productoNombre) {
           res.status(400).json({ success: false, message: "Producto inválido en el pedido" });
@@ -109,6 +134,7 @@ export const PedidosController = {
           cantidad,
           precioUnitario,
           subtotal: Math.round(cantidad * precioUnitario * 100) / 100,
+          ...(enSacos ? { librasPorSaco: factor } : {}),
         });
       }
 

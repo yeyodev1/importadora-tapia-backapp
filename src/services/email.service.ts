@@ -190,6 +190,8 @@ export function pedidoAjustadoEmail(p: {
   por: string;
   nota?: string;
   cambios: { productoNombre: string; antes: number; despues: number }[];
+  /** Lo editó el asesor: el aviso va a administración. */
+  porAsesor?: boolean;
 }): { subject: string; html: string } {
   const filas = p.cambios
     .map(
@@ -197,6 +199,18 @@ export function pedidoAjustadoEmail(p: {
         `<tr><td style="padding:8px 14px">${esc(c.productoNombre)}</td><td style="padding:8px 14px;text-align:right;white-space:nowrap">${c.antes} → <b>${c.despues === 0 ? "quitado" : c.despues}</b></td></tr>`
     )
     .join("");
+  if (p.porAsesor) {
+    return {
+      subject: `El asesor bajó cantidades del pedido ${p.numero}`,
+      html: shell(
+        `Pedido <span style="color:#C27C0E">AJUSTADO</span> por el asesor`,
+        `<p><b>${esc(p.por)}</b> bajó cantidades del pedido <b>${p.numero}</b> para <b>${esc(p.clienteNombre)}</b>:</p>
+         <table style="width:100%;background:#f5f7fa;border-radius:8px;margin:12px 0">${filas}</table>
+         ${p.nota ? `<p style="background:#fdf4e3;border-radius:8px;padding:10px 14px;color:#C27C0E">Nota del asesor: ${esc(p.nota)}</p>` : ""}
+         <p>Nuevo total: <b>${money(p.total)}</b>. Lo que bajó volvió al stock disponible. Si ya estaba facturado, corrige la factura en el ERP.</p>`
+      ),
+    };
+  }
   return {
     subject: `Tu pedido ${p.numero} cambió de cantidades`,
     html: shell(

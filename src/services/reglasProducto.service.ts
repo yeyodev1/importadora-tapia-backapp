@@ -6,12 +6,22 @@ export async function codigosSoloContado(): Promise<Set<string>> {
   return new Set(rows.map((r) => String(r.proCodigo)));
 }
 
-/** Agrega `solo_contado` a cada fila del inventario para que la app lo muestre. */
+/** Libras de cada saco por código de producto (solo los que se venden en saco). */
+export async function librasPorSaco(): Promise<Map<string, number>> {
+  const rows = await ReglaProductoModel.find({ librasPorSaco: { $gt: 0 } }).select("proCodigo librasPorSaco").lean();
+  return new Map(rows.map((r) => [String(r.proCodigo), Number(r.librasPorSaco)]));
+}
+
+/** Agrega `solo_contado` y `libras_por_saco` a cada fila del inventario para que la app lo muestre. */
 export async function marcarSoloContado<T extends { pro_codigo: string | number }>(
   rows: T[]
-): Promise<(T & { solo_contado: boolean })[]> {
-  const set = await codigosSoloContado();
-  return rows.map((r) => ({ ...r, solo_contado: set.has(String(r.pro_codigo)) }));
+): Promise<(T & { solo_contado: boolean; libras_por_saco: number | null })[]> {
+  const [set, sacos] = await Promise.all([codigosSoloContado(), librasPorSaco()]);
+  return rows.map((r) => ({
+    ...r,
+    solo_contado: set.has(String(r.pro_codigo)),
+    libras_por_saco: sacos.get(String(r.pro_codigo)) ?? null,
+  }));
 }
 
 /**

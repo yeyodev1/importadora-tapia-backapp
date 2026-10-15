@@ -22,12 +22,15 @@ pedidosRouter.get("/ventas-asesores", sinBodega, PedidosVentasController.porAses
 pedidosRouter.post("/", sinBodega, PedidosController.create);
 // Admin aprueba, rechaza o deja en espera (con comentario / mensaje al asesor).
 pedidosRouter.patch("/:id/estado", adminOnly, PedidosEstadoController.updateEstado);
+// Quien factura (admin o bodega, p.ej. Josué) marca que ya está en el ERP: deja de reservar stock.
+pedidosRouter.patch("/:id/facturado", permitirRoles("admin", "bodega"), PedidosEstadoController.setFacturado);
+pedidosRouter.patch("/:id/erp-descontado", permitirRoles("admin", "bodega"), PedidosEstadoController.setErpDescontado);
 // Anular un pedido que aún no sale (admin cualquiera; vendedor los suyos). Libera stock.
 pedidosRouter.post("/:id/anular", sinBodega, PedidosCambiosController.anular);
 // El cliente no recibió un pedido aprobado (admin, quien despacha en su bodega o su asesor).
 pedidosRouter.post("/:id/rechazo-cliente", PedidosCambiosController.rechazoCliente);
-// Admin baja cantidades o quita líneas de un pedido que aún no sale.
-pedidosRouter.patch("/:id/items", adminOnly, PedidosCambiosController.ajustar);
+// Admin sube o baja cantidades de un pedido que aún no sale; el asesor solo baja las de los suyos.
+pedidosRouter.patch("/:id/items", sinBodega, PedidosCambiosController.ajustar);
 pedidosRouter.patch("/:id/fotos", sinBodega, PedidosController.updateFotos);
 // Bodega marca la salida del pedido aprobado (hora del servidor + fotos).
 pedidosRouter.patch("/:id/despacho", permitirRoles("admin", "bodega"), DespachosController.marcarSalida);

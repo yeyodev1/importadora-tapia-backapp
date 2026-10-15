@@ -43,6 +43,13 @@ export function entregadoPorLinea(entregas?: EntregaPedido[]): Record<string, nu
   return m;
 }
 
+/** Cuándo y quién marcó el pedido como facturado en el ERP. */
+export interface Facturacion {
+  at: Date;
+  por: string;
+  numeroFactura?: string;
+}
+
 /** Administración bajó cantidades (o quitó líneas) de un pedido ya enviado. */
 export interface AjustePedido {
   at: Date;
@@ -59,6 +66,21 @@ export interface PedidoItem {
   cantidad: number;
   precioUnitario: number;
   subtotal: number;
+  /**
+   * Producto que se vende por libra pero sale en saco: libras de cada saco al
+   * momento del pedido. `cantidad` y `precioUnitario` siguen en la unidad del
+   * ERP (libras) para que stock, cupos y factura cuadren; esto es para mostrar sacos.
+   */
+  librasPorSaco?: number;
+}
+
+/**
+ * Stock del ERP de los productos del pedido cuando se aprobó (antes de
+ * facturar). Sirve para saber si el ERP ya descontó un pedido marcado facturado.
+ */
+export interface StockAlAprobar {
+  at: Date;
+  stocks: { clave: string; stock: number }[];
 }
 
 /** Despacho que no pudo salir el día previsto: cuándo sale y por qué. */
@@ -110,6 +132,14 @@ export interface IPedido extends Document {
   /** El cliente no recibió el pedido: motivo, quién lo registró y si ya había salido de bodega. */
   rechazoCliente?: Anulacion & { yaHabiaSalido: boolean };
   ajustes?: AjustePedido[];
+  /**
+   * Administración ya facturó el pedido en el ERP. El ERP descuenta el stock al
+   * facturar (no al aprobar): hasta entonces el pedido aprobado sigue reservando.
+   */
+  facturacion?: Facturacion;
+  stockAlAprobar?: StockAlAprobar;
+  /** Alguien confirmó que el ERP ya descontó este pedido: deja de apartar. */
+  erpDescontado?: { at: Date; por: string };
   estado: EstadoPedido;
   createdAt: Date;
 }
@@ -123,6 +153,7 @@ const itemSchema = new Schema<PedidoItem>(
     cantidad: { type: Number, required: true, min: 0 },
     precioUnitario: { type: Number, required: true, min: 0 },
     subtotal: { type: Number, required: true, min: 0 },
+    librasPorSaco: { type: Number, min: 0 },
   },
   { _id: false }
 );
@@ -260,6 +291,34 @@ const pedidoSchema = new Schema<IPedido>(
           { _id: false }
         ),
       ],
+      default: undefined,
+    },
+    facturacion: {
+      type: new Schema(
+        {
+          at: { type: Date, required: true },
+          por: { type: String, required: true },
+          numeroFactura: { type: String, trim: true },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
+    stockAlAprobar: {
+      type: new Schema(
+        {
+          at: { type: Date, required: true },
+          stocks: {
+            type: [new Schema({ clave: { type: String, required: true }, stock: { type: Number, required: true } }, { _id: false })],
+            default: [],
+          },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
+    erpDescontado: {
+      type: new Schema({ at: { type: Date, required: true }, por: { type: String, required: true } }, { _id: false }),
       default: undefined,
     },
     // El vendedor SIEMPRE puede enviar; administración aprueba, rechaza o lo deja en espera.

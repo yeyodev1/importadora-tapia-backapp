@@ -5,8 +5,10 @@ import { UserModel } from "../models/user.model";
 import { sendMail, pedidoEstadoEmail } from "../services/email.service";
 import { AuthRequest } from "../types/AuthRequest";
 import { excesoCupo, ESTADOS_CON_CUPO } from "../services/cupos.service";
+import { validarDisponibilidad, stockAlAprobar } from "../services/stock.service";
+import { accesoDeUsuario, pedidoEsDeBodega } from "../services/bodegaUsuario.service";
 
-/** Nombre del admin para el historial (si no se encuentra, su correo). */
+/** Nombre de quien hace el cambio para el historial (si no se encuentra, su correo). */
 async function nombreAdmin(req: AuthRequest): Promise<string> {
   const u = req.user?.id && mongoose.isValidObjectId(req.user.id)
     ? await UserModel.findById(req.user.id).select("name").lean()
@@ -71,9 +73,24 @@ export const PedidosEstadoController = {
           return;
         }
       }
+      // Al aprobar (o reactivar) el pedido tiene que caber en el stock que no
+      // reservan los demás pedidos sin facturar: si no, se vende dos veces lo mismo.
+      if (actual.estado !== "aprobado" && (nuevo === "aprobado" || nuevo === "en_espera")) {
+        const errorStock = await validarDisponibilidad(actual.items, id);
+        if (errorStock) {
+          res.status(409).json({
+            success: false,
+            message: `No alcanza el stock. ${errorStock} Si alguno de esos pedidos ya se facturó, márcalo como facturado.`,
+          });
+          return;
+        }
+      }
+
       const set: Record<string, unknown> = { estado: nuevo };
       const unset: Record<string, 1> = {};
       if (nuevo === "aprobado") {
+        // Stock del ERP antes de facturar: así se sabe después si el ERP ya lo descontó.
+        if (actual.estado !== "aprobado" || !actual.stockAlAprobar) set.stockAlAprobar = await stockAlAprobar(actual.items);
         if (nota) set.comentarioAprobacion = nota;
         else unset.comentarioAprobacion = 1;
       }
@@ -108,6 +125,85 @@ export const PedidosEstadoController = {
           })
           .catch(() => {});
       }
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Quien factura marca (o desmarca) que el pedido aprobado ya está facturado
+   * en el ERP. Desde ahí el ERP descuenta el stock y el pedido deja de reservar.
+   * Lo hace administración o bodega (Josué factura); bodega con bodega
+   * asignada solo en los pedidos de su bodega.
+   * body: { facturado: boolean, numeroFactura? }
+   */
+  async setFacturado(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const facturado = req.body?.facturado !== false;
+      const numeroFactura = String(req.body?.numeroFactura ?? "").trim().slice(0, 40);
+      const id = String(req.params.id);
+      const pedido = mongoose.isValidObjectId(id) ? await PedidoModel.findById(id) : null;
+      if (!pedido) {
+        res.status(404).json({ success: false, message: "Pedido no encontrado" });
+        return;
+      }
+      if (req.user?.role !== "admin") {
+        const { bodega } = await accesoDeUsuario(req.user);
+        if (!pedidoEsDeBodega(pedido.items, bodega)) {
+          res.status(403).json({ success: false, message: "Este pedido no es de tu bodega" });
+          return;
+        }
+      }
+      if (pedido.estado !== "aprobado") {
+        res.status(409).json({ success: false, message: "Solo un pedido aprobado se puede marcar como facturado" });
+        return;
+      }
+      if (facturado) {
+        pedido.set("facturacion", { at: new Date(), por: await nombreAdmin(req), ...(numeroFactura ? { numeroFactura } : {}) });
+      } else {
+        if (pedido.despacho?.salidaAt || pedido.entregas?.length) {
+          res.status(409).json({ success: false, message: "El pedido ya salió de bodega: ya está facturado" });
+          return;
+        }
+        // Vuelve a reservar aunque ya no alcance: es lo real (está aprobado y
+        // sin facturar), y así no se aprueba otro pedido con ese mismo stock.
+        pedido.set("facturacion", undefined);
+        pedido.set("erpDescontado", undefined);
+      }
+      await pedido.save();
+      res.json({ success: true, data: pedido });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Un pedido facturado (o que ya salió) sigue apartando lo que el ERP aún no
+   * baja. Si el ERP ya lo descontó y la app no lo detecta (p.ej. llegó
+   * mercadería el mismo día), administración o bodega lo confirma aquí.
+   */
+  async setErpDescontado(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const id = String(req.params.id);
+      const pedido = mongoose.isValidObjectId(id) ? await PedidoModel.findById(id) : null;
+      if (!pedido) {
+        res.status(404).json({ success: false, message: "Pedido no encontrado" });
+        return;
+      }
+      if (req.user?.role !== "admin") {
+        const { bodega } = await accesoDeUsuario(req.user);
+        if (!pedidoEsDeBodega(pedido.items, bodega)) {
+          res.status(403).json({ success: false, message: "Este pedido no es de tu bodega" });
+          return;
+        }
+      }
+      if (pedido.estado !== "aprobado" || !(pedido.facturacion || pedido.despacho?.salidaAt || pedido.entregas?.length)) {
+        res.status(409).json({ success: false, message: "Primero márcalo como facturado: el ERP descuenta al facturar" });
+        return;
+      }
+      pedido.set("erpDescontado", { at: new Date(), por: await nombreAdmin(req) });
+      await pedido.save();
+      res.json({ success: true, data: pedido });
     } catch (error) {
       next(error);
     }

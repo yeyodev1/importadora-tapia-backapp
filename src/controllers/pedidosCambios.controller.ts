@@ -147,6 +147,9 @@ export const PedidosCambiosController = {
   /**
    * Administración cambia cantidades o quita líneas de un pedido que aún no
    * sale (p.ej. el cliente pidió 100 y solo le tocan 97, o ahora quiere más).
+   * El asesor también puede BAJAR las de sus pedidos (el cliente ya no quiere
+   * los 100, solo 50): lo que baja queda libre para venderlo a otro cliente.
+   * Subir es solo de administración (pasa por su aprobación).
    * Lo que se baja vuelve al stock; lo que se sube se valida contra el stock
    * disponible y el cupo del asesor (solo la diferencia).
    * body: { cantidades: number[] (una por línea, en el mismo orden), nota? }
@@ -159,6 +162,11 @@ export const PedidosCambiosController = {
       const pedido = mongoose.isValidObjectId(id) ? await PedidoModel.findById(id) : null;
       if (!pedido) {
         res.status(404).json({ success: false, message: "Pedido no encontrado" });
+        return;
+      }
+      const esAdmin = req.user?.role === "admin";
+      if (!esAdmin && pedido.vendedorId !== req.user?.id) {
+        res.status(403).json({ success: false, message: "Solo el asesor del pedido o un administrador pueden editarlo" });
         return;
       }
       if (pedido.despacho?.salidaAt) {
@@ -191,6 +199,13 @@ export const PedidosCambiosController = {
           res.status(400).json({ success: false, message: `${it.productoNombre}: ya salieron ${salio}, no puede quedar en menos` });
           return;
         }
+        if (nueva > it.cantidad && !esAdmin) {
+          res.status(403).json({
+            success: false,
+            message: `${it.productoNombre}: solo puedes bajar la cantidad. Para subirla pídeselo a administración o haz otro pedido.`,
+          });
+          return;
+        }
         if (nueva > it.cantidad) {
           aumentos.push({ productoCodigo: it.productoCodigo, productoNombre: it.productoNombre, bodega: it.bodega, cantidad: nueva - it.cantidad });
         }
@@ -204,6 +219,7 @@ export const PedidosCambiosController = {
             cantidad: nueva,
             precioUnitario: it.precioUnitario,
             subtotal: redondear(nueva * it.precioUnitario),
+            ...(it.librasPorSaco ? { librasPorSaco: it.librasPorSaco } : {}),
           });
         }
       }
@@ -242,20 +258,21 @@ export const PedidosCambiosController = {
       await pedido.save();
       res.json({ success: true, data: pedido });
 
-      // Aviso al vendedor (no bloquea la respuesta).
-      UserModel.findById(pedido.vendedorId)
-        .then((u) => {
-          if (!u) return;
-          const mail = pedidoAjustadoEmail({
-            numero: pedido.numero,
-            clienteNombre: pedido.clienteNombre,
-            total: pedido.total,
-            por,
-            nota: nota || undefined,
-            cambios,
-          });
-          return sendMail({ to: u.email, ...mail });
-        })
+      // Aviso a la otra parte: al asesor si editó administración, a administración si editó el asesor.
+      const mail = pedidoAjustadoEmail({
+        numero: pedido.numero,
+        clienteNombre: pedido.clienteNombre,
+        total: pedido.total,
+        por,
+        nota: nota || undefined,
+        cambios,
+        porAsesor: !esAdmin,
+      });
+      const destinos = esAdmin
+        ? UserModel.findById(pedido.vendedorId).select("email").then((u) => (u ? [u.email] : []))
+        : UserModel.find({ role: "admin" }).select("email").then((us) => us.map((u) => u.email));
+      destinos
+        .then((emails) => Promise.all(emails.map((to) => sendMail({ to, ...mail }))))
         .catch(() => {});
     } catch (error) {
       next(error);

@@ -3,6 +3,7 @@ import { ErpService } from "../services/erp.service";
 import { cachedRead } from "../services/erpCache.service";
 import { filtrarInventario } from "../services/asignacionInventario.service";
 import { marcarSoloContado } from "../services/reglasProducto.service";
+import { conReservas } from "../services/stock.service";
 import { AuthRequest } from "../types/AuthRequest";
 
 /** Los vendedores sólo ven su propia cartera; admin ve todo. */
@@ -61,7 +62,8 @@ export const ErpController = {
       const { data, asignacion } = await filtrarInventario(r.data as any[], req.user);
       res.json({
         success: true,
-        data: await marcarSoloContado(data),
+        // Lo apartado por pedidos sin facturar no está libre aunque el ERP aún lo cuente.
+        data: await marcarSoloContado(await conReservas(data, req.user?.role === "admin" || req.user?.role === "bodega" || !!req.user?.rolesExtra?.includes("bodega"))),
         meta: { stale: r.stale, updatedAt: r.updatedAt, source: r.stale ? "cache" : "erp", error: r.error, asignacion },
       });
     } catch (error) {
