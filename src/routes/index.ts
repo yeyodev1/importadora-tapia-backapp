@@ -9,6 +9,7 @@ import inventarioRouter from "./inventario.routes";
 import estadoRouter from "./estado.routes";
 import visitasRouter from "./visitas.routes";
 import solicitudesRouter from "./solicitudes.routes";
+import notasCreditoRouter from "./notasCredito.routes";
 
 function routerApi(app: Application) {
   const router = express.Router();
@@ -24,6 +25,7 @@ function routerApi(app: Application) {
   router.use("/estado", estadoRouter);
   router.use("/visitas", visitasRouter);
   router.use("/solicitudes", solicitudesRouter);
+  router.use("/notas-credito", notasCreditoRouter);
 }
 
 export default routerApi;
