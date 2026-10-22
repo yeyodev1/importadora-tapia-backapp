@@ -15,12 +15,35 @@ async function query(sql: string, params: unknown[] = []) {
   return rows;
 }
 
+/**
+ * La vista del proveedor exige que el cliente ya tenga un documento
+ * (JOIN in_trancab), así que los recién creados en el ERP no salen hasta su
+ * primera factura. Este SELECT los completa desde la tabla base: personas
+ * activas con vendedor asignado que aún no aparecen en la vista.
+ */
+const CLIENTES_SIN_FACTURA = `
+  SELECT p.per_nombre, p.per_direccion, p.per_identificacion, p.per_telefono,
+         p.per_email, v.ven_nombre, p.per_codigo, p.ven_codigo
+  FROM in_persona p
+  LEFT JOIN in_vendedor v ON v.ven_codigo = p.ven_codigo
+  WHERE p.per_estado = 0 AND p.ven_codigo IS NOT NULL
+    AND p.per_codigo NOT IN (SELECT per_codigo FROM vw_crm_clientes)`;
+
 export const ErpService = {
-  getClientes(venCodigo?: string) {
-    if (venCodigo) {
-      return query("SELECT * FROM vw_crm_clientes WHERE ven_codigo = ?", [venCodigo]);
+  async getClientes(venCodigo?: string) {
+    const base = venCodigo
+      ? query("SELECT * FROM vw_crm_clientes WHERE ven_codigo = ?", [venCodigo])
+      : query("SELECT * FROM vw_crm_clientes");
+    try {
+      const extra = venCodigo
+        ? query(`${CLIENTES_SIN_FACTURA} AND p.ven_codigo = ?`, [venCodigo])
+        : query(CLIENTES_SIN_FACTURA);
+      const [vista, nuevos] = await Promise.all([base, extra]);
+      return [...(vista as unknown[]), ...(nuevos as unknown[])];
+    } catch {
+      // crm_user sin SELECT sobre in_persona: se sigue sólo con la vista.
+      return base;
     }
-    return query("SELECT * FROM vw_crm_clientes");
   },
 
   getVendedores(venCodigo?: string) {
