@@ -18,18 +18,16 @@ function key(codigo: string, bodega?: string): string {
  * FACTURAR, no al aprobar (el cliente puede tardar días en retirar):
  *  - enviado / en espera: siempre reservan.
  *  - aprobado sin facturar ni salir de bodega: reserva todo.
- *  - aprobado ya marcado facturado o salido: la marca en la app puede llegar
- *    antes que la factura en el ERP (pasó con OP-000139: facturado 19 s
- *    después de aprobar, el ERP seguía igual). Sigue apartando lo que el ERP
- *    todavía no baja desde que se aprobó, hasta 48 h o hasta que alguien
- *    confirme que el ERP ya lo descontó. Sin foto del stock al aprobar
- *    (pedidos viejos) ya no reserva, o se restaría dos veces (la lenteja).
+ *  - aprobado ya marcado facturado o con salidas: bodega factura en el ERP
+ *    días después de despachar (el canguil: salió de bodega y el ERP seguía
+ *    con las 325). Sigue apartando lo que el ERP todavía no baja desde que
+ *    se aprobó — sin límite de tiempo: la reserva se libera sola cuando el
+ *    ERP baja el stock, o cuando alguien confirma el descuento. Sin foto del
+ *    stock al aprobar (pedidos viejos) ya no reserva, o se restaría dos
+ *    veces (la lenteja).
  * Rechazados, anulados y rechazados por el cliente no reservan.
  */
-const ESPERA_ERP_MS = 48 * 60 * 60 * 1000;
-
 function filtroReserva() {
-  const desde = new Date(Date.now() - ESPERA_ERP_MS);
   return {
     $or: [
       { estado: { $in: ["enviado", "en_espera"] } },
@@ -43,7 +41,11 @@ function filtroReserva() {
         estado: "aprobado",
         "stockAlAprobar.at": { $exists: true },
         erpDescontado: { $exists: false },
-        $or: [{ "facturacion.at": { $gte: desde } }, { "entregas.0.at": { $gte: desde } }],
+        $or: [
+          { facturacion: { $exists: true } },
+          { "despacho.salidaAt": { $exists: true } },
+          { "entregas.0": { $exists: true } },
+        ],
       },
     ],
   };
