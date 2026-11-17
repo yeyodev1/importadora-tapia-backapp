@@ -37,6 +37,9 @@ function avisarAdmins(s: any) {
     vendedor: s.vendedorNombre,
     tipo: s.tipo,
     nDocumentos: s.documentos.length,
+    pideCredito: s.pideCredito !== false,
+    cupoSolicitado: s.cupoSolicitado,
+    plazoDias: s.plazoDias,
   });
   UserModel.find({ role: "admin" })
     .select("email")

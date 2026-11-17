@@ -57,7 +57,7 @@ export async function sendMail({ to, subject, html, from, replyTo }: SendMailInp
 const baseStyles =
   'font-family:Arial,Helvetica,sans-serif;color:#010D27;line-height:1.6;font-size:14px';
 
-function money(n: number): string {
+export function money(n: number): string {
   return new Intl.NumberFormat("es-EC", { style: "currency", currency: "USD" }).format(n);
 }
 
@@ -104,7 +104,7 @@ export function pedidoNuevoEmail(p: {
 }
 
 /** Escapa el texto libre que escribe administración antes de meterlo al HTML. */
-function esc(t: string): string {
+export function esc(t: string): string {
   return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 

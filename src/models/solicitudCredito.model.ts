@@ -44,7 +44,15 @@ export interface ISolicitudCredito extends Document {
     celular: string;
     direccionDomicilio: string;
     telefonoDomicilio: string;
+    correo: string;
   };
+  /** Ubicación GPS del negocio, tomada por el vendedor en el local (opcional). */
+  ubicacion?: { lat: number; lng: number };
+  /** false = solo alta del cliente (contado), sin solicitud de crédito. */
+  pideCredito: boolean;
+  /** Cupo pedido en USD y plazo en días (solo si pideCredito). */
+  cupoSolicitado?: number;
+  plazoDias?: number;
   refComerciales: { proveedor: string; montoMes: string; plazoPago: string; telefono: string }[];
   refBancarias: { banco: string; cuenta: string }[];
   refPersonales: { nombres: string; apellidos: string; parentesco: string; telefonos: string }[];
@@ -84,7 +92,16 @@ const solicitudSchema = new Schema<ISolicitudCredito>(
       celular: texto,
       direccionDomicilio: texto,
       telefonoDomicilio: texto,
+      correo: texto,
     },
+    ubicacion: {
+      type: new Schema({ lat: { type: Number, required: true }, lng: { type: Number, required: true } }, { _id: false }),
+      default: undefined,
+    },
+    // Las solicitudes viejas no tienen el campo: todas eran de crédito.
+    pideCredito: { type: Boolean, default: true },
+    cupoSolicitado: { type: Number },
+    plazoDias: { type: Number },
     refComerciales: [{ _id: false, proveedor: texto, montoMes: texto, plazoPago: texto, telefono: texto }],
     refBancarias: [{ _id: false, banco: texto, cuenta: texto }],
     refPersonales: [{ _id: false, nombres: texto, apellidos: texto, parentesco: texto, telefonos: texto }],
